@@ -44,15 +44,30 @@ def get_supabase_client() -> Optional[Client]:
     return None
 
 
+# Store last error for debugging
+_last_supabase_error = None
+
+def get_last_error() -> str:
+    """Get last Supabase error for debugging."""
+    global _last_supabase_error
+    return _last_supabase_error or "No error"
+
+
 def is_supabase_available() -> bool:
     """Kiểm tra xem Supabase có sẵn sàng không."""
+    global _last_supabase_error
     try:
         client = get_supabase_client()
-        if client:
-            # Test connection with a simple query
-            client.table('users').select('id').limit(1).execute()
-            return True
+        if not client:
+            _last_supabase_error = "Client is None - credentials missing"
+            return False
+        
+        # Test connection with a simple query
+        result = client.table('users').select('id').limit(1).execute()
+        _last_supabase_error = None
+        return True
     except Exception as e:
+        _last_supabase_error = str(e)
         print(f"Supabase availability check failed: {e}")
     return False
 
