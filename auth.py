@@ -14,9 +14,18 @@ from typing import Optional, Dict
 # Thử import Supabase module
 try:
     import supabase_db
-    SUPABASE_AVAILABLE = supabase_db.is_supabase_available()
+    _SUPABASE_MODULE_OK = True
 except:
-    SUPABASE_AVAILABLE = False
+    _SUPABASE_MODULE_OK = False
+
+def _check_supabase() -> bool:
+    """Kiểm tra Supabase có sẵn không (gọi mỗi lần, không cache)."""
+    if not _SUPABASE_MODULE_OK:
+        return False
+    try:
+        return supabase_db.is_supabase_available()
+    except:
+        return False
 
 # Đường dẫn thư mục chứa database của users (for SQLite fallback)
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_data")
@@ -64,7 +73,7 @@ def hash_password(password: str) -> str:
 
 def is_using_supabase() -> bool:
     """Kiểm tra có đang dùng Supabase không."""
-    return SUPABASE_AVAILABLE
+    return _check_supabase()
 
 
 def register_user(username: str, password: str, display_name: str = "") -> tuple:
@@ -88,7 +97,7 @@ def register_user(username: str, password: str, display_name: str = "") -> tuple
     display = display_name if display_name else username
     
     # Thử Supabase trước
-    if SUPABASE_AVAILABLE:
+    if _check_supabase():
         try:
             # Check if user exists
             existing = supabase_db.get_user_by_username(username)
@@ -142,7 +151,7 @@ def login_user(username: str, password: str) -> tuple:
     password_hash = hash_password(password)
     
     # Thử Supabase trước
-    if SUPABASE_AVAILABLE:
+    if _check_supabase():
         try:
             user = supabase_db.get_user_by_username(username)
             if user and user['password_hash'] == password_hash:
@@ -248,7 +257,7 @@ def show_login_page():
     st.markdown('<div class="auth-header"><h1>🚀 Quản Lý Giờ Làm</h1></div>', unsafe_allow_html=True)
     
     # Hiển thị trạng thái database
-    if SUPABASE_AVAILABLE:
+    if _check_supabase():
         st.success("☁️ **Cloud Mode** - Dữ liệu được lưu trên Supabase")
     else:
         st.warning("💾 **Local Mode** - Dữ liệu lưu cục bộ (có thể mất khi reboot)")

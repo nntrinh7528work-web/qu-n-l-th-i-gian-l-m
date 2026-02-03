@@ -1,31 +1,41 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
-Database Wrapper - Tự động chọn Supabase hoặc SQLite.
-Import module này thay vì import trực tiếp database.py hoặc supabase_db.py
+Database Wrapper - Tá»± Ä‘á»™ng chá»n Supabase hoáº·c SQLite.
+Import module nÃ y thay vÃ¬ import trá»±c tiáº¿p database.py hoáº·c supabase_db.py
 """
 
 import streamlit as st
 from datetime import date
 from typing import List, Dict, Optional
 
-# Thử import Supabase
+# Thá»­ import Supabase
 try:
     import supabase_db
-    _SUPABASE_OK = supabase_db.is_supabase_available()
+    _SUPABASE_MODULE_OK = True
 except:
-    _SUPABASE_OK = False
+    _SUPABASE_MODULE_OK = False
 
 # Import SQLite fallback
 import database as sqlite_db
 
 
+def _check_supabase() -> bool:
+    """Kiá»ƒm tra Supabase cÃ³ sáºµn khÃ´ng (gá»i má»—i láº§n)."""
+    if not _SUPABASE_MODULE_OK:
+        return False
+    try:
+        return supabase_db.is_supabase_available()
+    except:
+        return False
+
+
 def is_cloud_mode() -> bool:
-    """Kiểm tra đang dùng cloud (Supabase) hay local (SQLite)."""
-    return _SUPABASE_OK
+    """Kiá»ƒm tra Ä‘ang dÃ¹ng cloud (Supabase) hay local (SQLite)."""
+    return _check_supabase()
 
 
 def _get_user_id() -> Optional[int]:
-    """Lấy user_id từ session."""
+    """Láº¥y user_id tá»« session."""
     if "user_info" in st.session_state and st.session_state["user_info"]:
         return st.session_state["user_info"].get("id")
     return None
@@ -34,8 +44,8 @@ def _get_user_id() -> Optional[int]:
 # ==================== JOBS ====================
 
 def get_all_jobs() -> List[Dict]:
-    """Lấy tất cả công việc."""
-    if _SUPABASE_OK:
+    """Láº¥y táº¥t cáº£ cÃ´ng viá»‡c."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.get_all_jobs(user_id)
@@ -44,8 +54,8 @@ def get_all_jobs() -> List[Dict]:
 
 
 def add_job(job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> Optional[int]:
-    """Thêm công việc mới."""
-    if _SUPABASE_OK:
+    """ThÃªm cÃ´ng viá»‡c má»›i."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.add_job(user_id, job_name, hourly_rate, description, color)
@@ -54,22 +64,22 @@ def add_job(job_name: str, hourly_rate: float, description: str = "", color: str
 
 
 def update_job(job_id: int, job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> bool:
-    """Cập nhật công việc."""
-    if _SUPABASE_OK:
+    """Cáº­p nháº­t cÃ´ng viá»‡c."""
+    if _check_supabase():
         return supabase_db.update_job(job_id, job_name, hourly_rate, description, color)
     return sqlite_db.update_job(job_id, job_name, hourly_rate, description, color)
 
 
 def delete_job(job_id: int) -> bool:
-    """Xóa công việc."""
-    if _SUPABASE_OK:
+    """XÃ³a cÃ´ng viá»‡c."""
+    if _check_supabase():
         return supabase_db.delete_job(job_id)
     return sqlite_db.delete_job(job_id)
 
 
 def get_job_by_id(job_id: int) -> Optional[Dict]:
-    """Lấy thông tin công việc theo ID."""
-    if _SUPABASE_OK:
+    """Láº¥y thÃ´ng tin cÃ´ng viá»‡c theo ID."""
+    if _check_supabase():
         jobs = get_all_jobs()
         for job in jobs:
             if job['id'] == job_id:
@@ -90,8 +100,8 @@ def add_work_shift(
     notes: str = "",
     job_id: int = None
 ) -> int:
-    """Thêm ca làm việc mới."""
-    if _SUPABASE_OK:
+    """ThÃªm ca lÃ m viá»‡c má»›i."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             result = supabase_db.add_work_shift(user_id, work_date, shift_name, start_time, end_time, break_hours, total_hours, notes, job_id)
@@ -109,22 +119,22 @@ def update_work_shift(
     total_hours: float,
     notes: str = ""
 ) -> bool:
-    """Cập nhật ca làm việc."""
-    if _SUPABASE_OK:
+    """Cáº­p nháº­t ca lÃ m viá»‡c."""
+    if _check_supabase():
         return supabase_db.update_work_shift(shift_id, shift_name, start_time, end_time, break_hours, total_hours, notes)
     return sqlite_db.update_work_shift(shift_id, shift_name, start_time, end_time, break_hours, total_hours, notes)
 
 
 def delete_work_shift(shift_id: int) -> bool:
-    """Xóa ca làm việc."""
-    if _SUPABASE_OK:
+    """XÃ³a ca lÃ m viá»‡c."""
+    if _check_supabase():
         return supabase_db.delete_work_shift(shift_id)
     return sqlite_db.delete_work_shift(shift_id)
 
 
 def get_shifts_by_date(work_date: date) -> List[Dict]:
-    """Lấy các ca làm việc theo ngày."""
-    if _SUPABASE_OK:
+    """Láº¥y cÃ¡c ca lÃ m viá»‡c theo ngÃ y."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.get_shifts_by_date(user_id, work_date)
@@ -133,8 +143,8 @@ def get_shifts_by_date(work_date: date) -> List[Dict]:
 
 
 def get_shifts_by_range(start_date: date, end_date: date) -> List[Dict]:
-    """Lấy các ca làm việc trong khoảng thời gian."""
-    if _SUPABASE_OK:
+    """Láº¥y cÃ¡c ca lÃ m viá»‡c trong khoáº£ng thá»i gian."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.get_shifts_by_range(user_id, start_date, end_date)
@@ -143,30 +153,30 @@ def get_shifts_by_range(start_date: date, end_date: date) -> List[Dict]:
 
 
 def get_shift_by_id(shift_id: int) -> Optional[Dict]:
-    """Lấy thông tin ca làm việc theo ID."""
+    """Láº¥y thÃ´ng tin ca lÃ m viá»‡c theo ID."""
     return sqlite_db.get_shift_by_id(shift_id)
 
 
 def get_daily_summary(work_date: date, standard_hours: float = 8.0) -> Dict:
-    """Lấy tổng hợp giờ làm của một ngày."""
+    """Láº¥y tá»•ng há»£p giá» lÃ m cá»§a má»™t ngÃ y."""
     return sqlite_db.get_daily_summary(work_date, standard_hours)
 
 
 def get_daily_summaries_by_range(start_date: date, end_date: date, standard_hours: float = 8.0) -> List[Dict]:
-    """Lấy tổng hợp giờ làm theo ngày trong khoảng thời gian."""
+    """Láº¥y tá»•ng há»£p giá» lÃ m theo ngÃ y trong khoáº£ng thá»i gian."""
     return sqlite_db.get_daily_summaries_by_range(start_date, end_date, standard_hours)
 
 
 def get_daily_summaries_by_month(year: int, month: int, standard_hours: float = 8.0) -> List[Dict]:
-    """Lấy tổng hợp giờ làm theo ngày trong một tháng."""
+    """Láº¥y tá»•ng há»£p giá» lÃ m theo ngÃ y trong má»™t thÃ¡ng."""
     return sqlite_db.get_daily_summaries_by_month(year, month, standard_hours)
 
 
 # ==================== HOLIDAYS ====================
 
 def add_holiday(holiday_date: date, description: str) -> bool:
-    """Thêm ngày nghỉ."""
-    if _SUPABASE_OK:
+    """ThÃªm ngÃ y nghá»‰."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.add_holiday(user_id, holiday_date, description)
@@ -175,8 +185,8 @@ def add_holiday(holiday_date: date, description: str) -> bool:
 
 
 def remove_holiday(holiday_date: date) -> bool:
-    """Xóa ngày nghỉ."""
-    if _SUPABASE_OK:
+    """XÃ³a ngÃ y nghá»‰."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.remove_holiday(user_id, holiday_date)
@@ -185,8 +195,8 @@ def remove_holiday(holiday_date: date) -> bool:
 
 
 def get_all_holidays() -> List[Dict]:
-    """Lấy tất cả ngày nghỉ."""
-    if _SUPABASE_OK:
+    """Láº¥y táº¥t cáº£ ngÃ y nghá»‰."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.get_all_holidays(user_id)
@@ -195,8 +205,8 @@ def get_all_holidays() -> List[Dict]:
 
 
 def is_holiday(check_date: date) -> tuple:
-    """Kiểm tra ngày nghỉ."""
-    if _SUPABASE_OK:
+    """Kiá»ƒm tra ngÃ y nghá»‰."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.is_holiday(user_id, check_date)
@@ -207,8 +217,8 @@ def is_holiday(check_date: date) -> tuple:
 # ==================== SETTINGS ====================
 
 def get_setting(key: str) -> Optional[str]:
-    """Lấy cài đặt."""
-    if _SUPABASE_OK:
+    """Láº¥y cÃ i Ä‘áº·t."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.get_setting(user_id, key)
@@ -217,8 +227,8 @@ def get_setting(key: str) -> Optional[str]:
 
 
 def update_setting(key: str, value: str) -> bool:
-    """Cập nhật cài đặt."""
-    if _SUPABASE_OK:
+    """Cáº­p nháº­t cÃ i Ä‘áº·t."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.update_setting(user_id, key, value)
@@ -227,8 +237,8 @@ def update_setting(key: str, value: str) -> bool:
 
 
 def get_standard_hours() -> float:
-    """Lấy số giờ chuẩn."""
-    if _SUPABASE_OK:
+    """Láº¥y sá»‘ giá» chuáº©n."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.get_standard_hours(user_id)
@@ -237,8 +247,8 @@ def get_standard_hours() -> float:
 
 
 def get_default_break_hours() -> float:
-    """Lấy giờ nghỉ mặc định."""
-    if _SUPABASE_OK:
+    """Láº¥y giá» nghá»‰ máº·c Ä‘á»‹nh."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             return supabase_db.get_default_break_hours(user_id)
@@ -247,8 +257,8 @@ def get_default_break_hours() -> float:
 
 
 def get_ot_rate() -> float:
-    """Lấy hệ số OT."""
-    if _SUPABASE_OK:
+    """Láº¥y há»‡ sá»‘ OT."""
+    if _check_supabase():
         user_id = _get_user_id()
         if user_id:
             value = supabase_db.get_setting(user_id, 'ot_rate')
@@ -260,12 +270,12 @@ def get_ot_rate() -> float:
 # ==================== DATABASE INIT ====================
 
 def init_database():
-    """Khởi tạo database."""
-    # Supabase không cần init (đã có tables sẵn)
-    if not _SUPABASE_OK:
+    """Khá»Ÿi táº¡o database."""
+    # Supabase khÃ´ng cáº§n init (Ä‘Ã£ cÃ³ tables sáºµn)
+    if not _check_supabase():
         sqlite_db.init_database()
 
 
 def clear_cache():
-    """Xóa cache."""
+    """XÃ³a cache."""
     sqlite_db.clear_cache()
