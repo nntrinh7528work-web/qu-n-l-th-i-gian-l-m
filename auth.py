@@ -257,36 +257,46 @@ def show_login_page():
     st.markdown('<div class="auth-header"><h1>🚀 Quản Lý Giờ Làm</h1></div>', unsafe_allow_html=True)
     
     # Hiển thị trạng thái database
-    if _check_supabase():
+    is_cloud = _check_supabase()
+    if is_cloud:
         st.success("☁️ **Cloud Mode** - Dữ liệu được lưu trên Supabase")
     else:
         st.warning("💾 **Local Mode** - Dữ liệu lưu cục bộ (có thể mất khi reboot)")
+    
+    # Debug info - LUÔN HIỂN THỊ
+    with st.expander("🔧 Debug Info - Kiểm tra kết nối", expanded=not is_cloud):
+        import os
+        st.write("**Kiểm tra Streamlit Secrets:**")
+        has_secrets = hasattr(st, 'secrets')
+        st.write(f"- hasattr(st, 'secrets'): `{has_secrets}`")
         
-        # Debug info
-        with st.expander("🔧 Debug Info (click để xem)"):
-            import os
-            has_secrets = hasattr(st, 'secrets')
-            st.write(f"- hasattr(st, 'secrets'): {has_secrets}")
+        if has_secrets:
+            try:
+                secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else "N/A"
+                st.write(f"- Secrets keys: `{secrets_keys}`")
+            except Exception as e:
+                st.write(f"- Secrets keys: Error - `{e}`")
             
-            if has_secrets:
-                try:
-                    secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else "N/A"
-                    st.write(f"- Secrets keys: {secrets_keys}")
-                except:
-                    st.write("- Secrets keys: Error reading")
+            try:
+                has_url = "SUPABASE_URL" in st.secrets
+                has_key = "SUPABASE_KEY" in st.secrets
+                st.write(f"- SUPABASE_URL in secrets: `{has_url}`")
+                st.write(f"- SUPABASE_KEY in secrets: `{has_key}`")
                 
-                try:
-                    has_url = "SUPABASE_URL" in st.secrets
-                    has_key = "SUPABASE_KEY" in st.secrets
-                    st.write(f"- SUPABASE_URL in secrets: {has_url}")
-                    st.write(f"- SUPABASE_KEY in secrets: {has_key}")
-                except Exception as e:
-                    st.write(f"- Error checking secrets: {e}")
-            
-            env_url = os.environ.get("SUPABASE_URL", "Not set")
-            env_key = os.environ.get("SUPABASE_KEY", "Not set")
-            st.write(f"- ENV SUPABASE_URL: {'Set' if env_url != 'Not set' else 'Not set'}")
-            st.write(f"- ENV SUPABASE_KEY: {'Set' if env_key != 'Not set' else 'Not set'}")
+                if has_url:
+                    url_val = st.secrets["SUPABASE_URL"]
+                    st.write(f"- SUPABASE_URL value: `{url_val[:30]}...`")
+            except Exception as e:
+                st.write(f"- Error checking secrets: `{e}`")
+        
+        st.write("**Kiểm tra Environment Variables:**")
+        env_url = os.environ.get("SUPABASE_URL", "")
+        env_key = os.environ.get("SUPABASE_KEY", "")
+        st.write(f"- ENV SUPABASE_URL: `{'Set (' + env_url[:20] + '...)' if env_url else 'Not set'}`")
+        st.write(f"- ENV SUPABASE_KEY: `{'Set' if env_key else 'Not set'}`")
+        
+        st.write("**Kết quả kiểm tra Supabase:**")
+        st.write(f"- _check_supabase(): `{is_cloud}`")
     
     # Tabs đăng nhập / đăng ký
     tab_login, tab_register = st.tabs(["👤 Đăng Nhập", "✨ Đăng Ký"])
