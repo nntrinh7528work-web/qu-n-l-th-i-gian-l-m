@@ -8,8 +8,8 @@ import streamlit as st
 import hashlib
 import os
 import sqlite3
-from datetime import datetime
-from typing import Optional, Dict
+import extra_streamlit_components as stx
+from datetime import datetime, timedelta
 
 # Thử import Supabase module
 try:
@@ -215,11 +215,84 @@ def get_current_user_id() -> Optional[int]:
     return None
 
 
+@st.cache_resource(experimental_allow_widgets=True)
+def get_cookie_manager():
+    return stx.CookieManager(key="auth_cookie_manager")
+
+
+def set_remember_me_cookie(username: str, password_hash: str):
+    """Lưu cookie đăng nhập (30 ngày)."""
+    try:
+        cookie_manager = get_cookie_manager()
+        # Token format: username|password_hash
+        token = f"{username}|{password_hash}"
+        expires = datetime.now() + timedelta(days=30)
+        cookie_manager.set("work_tracker_token", token, expires_at=expires)
+    except:
+        pass
+
+
+def check_auto_login() -> bool:
+    """Kiểm tra cookie để login tự động."""
+    if is_logged_in():
+        return True
+
+    try:
+        cookie_manager = get_cookie_manager()
+        cookies = cookie_manager.get_all()
+        token = cookies.get("work_tracker_token")
+        
+        if token and "|" in token:
+            username, pw_hash = token.split("|", 1)
+            
+            # Verify with DB
+            if _check_supabase():
+               user = supabase_db.get_user_by_username(username)
+               if user and user['password_hash'] == pw_hash:
+                   st.session_state["logged_in"] = True
+                   st.session_state["user_info"] = user
+                   st.session_state["user_db_path"] = None
+                   supabase_db.update_user_last_login(user['id'])
+                   return True
+            else:
+                # Local SQLite verification
+                init_users_db()
+                conn = sqlite3.connect(get_users_db_path())
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM users WHERE username = ? AND password_hash = ?", (username, pw_hash))
+                row = cursor.fetchone()
+                conn.close()
+                
+                if row:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user_info"] = dict(row)
+                    st.session_state["user_db_path"] = get_user_db_path(username)
+                    
+                    # Update last login
+                    conn = sqlite3.connect(get_users_db_path())
+                    conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", (row['id'],))
+                    conn.commit()
+                    conn.close()
+                    return True
+    except Exception as e:
+        print(f"Auto login error: {e}")
+        
+    return False
+
+
 def logout():
     """Đăng xuất người dùng."""
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
     st.session_state["user_db_path"] = None
+    
+    # Xóa Cookie
+    try:
+        cookie_manager = get_cookie_manager()
+        cookie_manager.delete("work_tracker_token")
+    except:
+        pass
 
 
 def show_login_page():
@@ -319,6 +392,7 @@ def show_login_page():
         with st.form("login_form"):
             username = st.text_input("Tên đăng nhập", placeholder="Nhập tên đăng nhập")
             password = st.text_input("Mật khẩu", type="password", placeholder="Nhập mật khẩu")
+            remember_me = st.checkbox("Ghi nhớ đăng nhập (30 ngày)")
             
             submit = st.form_submit_button("Đăng Nhập", use_container_width=True, type="primary")
             
@@ -330,6 +404,11 @@ def show_login_page():
                         st.session_state["logged_in"] = True
                         st.session_state["user_info"] = user_info
                         st.session_state["user_db_path"] = get_user_db_path(username)
+                        
+                        if remember_me:
+                            set_remember_me_cookie(username, user_info['password_hash'])
+                            st.toast("Đã ghi nhớ đăng nhập!")
+                        
                         st.success(message)
                         st.rerun()
                     else:

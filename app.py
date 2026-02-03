@@ -190,6 +190,9 @@ st.markdown("""
 
 # ==================== KIỂM TRA ĐĂNG NHẬP ====================
 
+# Thử Auto-login từ cookie
+auth.check_auto_login()
+
 # Hiển thị trang đăng nhập nếu chưa đăng nhập
 if not auth.is_logged_in():
     auth.show_login_page()
