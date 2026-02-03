@@ -10,6 +10,7 @@ import os
 import sqlite3
 import extra_streamlit_components as stx
 from datetime import datetime, timedelta
+from typing import Optional, Dict
 
 # Thử import Supabase module
 try:
