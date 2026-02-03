@@ -978,6 +978,66 @@ with tab3:
             
             st.markdown("---")
             
+            # ==================== TÍNH LƯƠNG DỰ TÍNH ====================
+            st.subheader("💰 Lương Dự Tính")
+            
+            # Lấy tất cả ca làm việc trong khoảng thời gian
+            all_shifts = db.get_shifts_by_range(report_start, report_end)
+            all_jobs = db.get_all_jobs()
+            job_map = {j['id']: j for j in all_jobs}
+            
+            # Tính lương theo từng công việc
+            job_salary_data = {}
+            total_salary = 0
+            
+            for shift in all_shifts:
+                job_id = shift.get('job_id', 0)
+                hours = shift.get('total_hours', 0)
+                
+                if job_id in job_map:
+                    job_info = job_map[job_id]
+                    job_name = job_info['job_name']
+                    hourly_rate = job_info['hourly_rate']
+                else:
+                    job_name = "Chưa phân loại"
+                    hourly_rate = 0
+                
+                if job_name not in job_salary_data:
+                    job_salary_data[job_name] = {
+                        'hours': 0,
+                        'salary': 0,
+                        'hourly_rate': hourly_rate,
+                        'shift_count': 0
+                    }
+                
+                job_salary_data[job_name]['hours'] += hours
+                job_salary_data[job_name]['salary'] += hours * hourly_rate
+                job_salary_data[job_name]['shift_count'] += 1
+                total_salary += hours * hourly_rate
+            
+            # Hiển thị tổng lương
+            col_salary1, col_salary2 = st.columns([1, 2])
+            
+            with col_salary1:
+                st.markdown(f"""
+                <div class="stat-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+                    <h3>💴 {total_salary:,.0f}</h3>
+                    <p>Yen (Lương dự tính)</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_salary2:
+                # Hiển thị chi tiết theo từng công việc
+                if job_salary_data:
+                    st.markdown("**📋 Chi tiết theo công việc:**")
+                    for job_name, data in job_salary_data.items():
+                        if data['salary'] > 0:
+                            st.markdown(f"""
+                            - **{job_name}**: {data['hours']:.1f}h × {data['hourly_rate']:,.0f} Yen = **{data['salary']:,.0f} Yen** ({data['shift_count']} ca)
+                            """)
+            
+            st.markdown("---")
+            
             # Biểu đồ giờ làm
             st.subheader("📈 Biểu Đồ Giờ Làm")
             
