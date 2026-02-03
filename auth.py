@@ -8,7 +8,13 @@ import streamlit as st
 import hashlib
 import os
 import sqlite3
-import extra_streamlit_components as stx
+import sqlite3
+try:
+    import extra_streamlit_components as stx
+    _COOKIE_MANAGER_OK = True
+except ImportError:
+    stx = None
+    _COOKIE_MANAGER_OK = False
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 
@@ -218,17 +224,26 @@ def get_current_user_id() -> Optional[int]:
 
 @st.cache_resource(experimental_allow_widgets=True)
 def get_cookie_manager():
-    return stx.CookieManager(key="auth_cookie_manager")
+    if not _COOKIE_MANAGER_OK or stx is None:
+        return None
+    try:
+        return stx.CookieManager(key="auth_cookie_manager")
+    except:
+        return None
 
 
 def set_remember_me_cookie(username: str, password_hash: str):
     """Lưu cookie đăng nhập (30 ngày)."""
+    if not _COOKIE_MANAGER_OK:
+        return
+        
     try:
         cookie_manager = get_cookie_manager()
-        # Token format: username|password_hash
-        token = f"{username}|{password_hash}"
-        expires = datetime.now() + timedelta(days=30)
-        cookie_manager.set("work_tracker_token", token, expires_at=expires)
+        if cookie_manager:
+            # Token format: username|password_hash
+            token = f"{username}|{password_hash}"
+            expires = datetime.now() + timedelta(days=30)
+            cookie_manager.set("work_tracker_token", token, expires_at=expires)
     except:
         pass
 
@@ -238,8 +253,14 @@ def check_auto_login() -> bool:
     if is_logged_in():
         return True
 
+    if not _COOKIE_MANAGER_OK:
+        return False
+
     try:
         cookie_manager = get_cookie_manager()
+        if not cookie_manager:
+            return False
+            
         cookies = cookie_manager.get_all()
         token = cookies.get("work_tracker_token")
         
@@ -289,11 +310,13 @@ def logout():
     st.session_state["user_db_path"] = None
     
     # Xóa Cookie
-    try:
-        cookie_manager = get_cookie_manager()
-        cookie_manager.delete("work_tracker_token")
-    except:
-        pass
+    if _COOKIE_MANAGER_OK:
+        try:
+            cookie_manager = get_cookie_manager()
+            if cookie_manager:
+                cookie_manager.delete("work_tracker_token")
+        except:
+            pass
 
 
 def show_login_page():
@@ -393,7 +416,10 @@ def show_login_page():
         with st.form("login_form"):
             username = st.text_input("Tên đăng nhập", placeholder="Nhập tên đăng nhập")
             password = st.text_input("Mật khẩu", type="password", placeholder="Nhập mật khẩu")
-            remember_me = st.checkbox("Ghi nhớ đăng nhập (30 ngày)")
+            
+            remember_me = False
+            if _COOKIE_MANAGER_OK:
+                remember_me = st.checkbox("Ghi nhớ đăng nhập (30 ngày)")
             
             submit = st.form_submit_button("Đăng Nhập", use_container_width=True, type="primary")
             
