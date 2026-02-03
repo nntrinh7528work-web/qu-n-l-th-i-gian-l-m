@@ -10,6 +10,7 @@ import os
 import sqlite3
 from datetime import datetime
 from typing import Optional, Dict
+import github_sync  # Import module sync
 
 # Đường dẫn thư mục chứa database của users
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_data")
@@ -17,6 +18,12 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_data")
 # Đảm bảo thư mục tồn tại
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
+
+# Sync users.db khi khởi động (để đảm bảo có ds user mới nhất)
+try:
+    github_sync.sync_pull_users_db()
+except:
+    pass
 
 
 def get_users_db_path() -> str:
@@ -91,6 +98,12 @@ def register_user(username: str, password: str, display_name: str = "") -> tuple
         conn.commit()
         conn.close()
         
+        # Sync file users.db mới lên GitHub
+        try:
+            github_sync.sync_push_users_db()
+        except:
+            pass
+        
         return True, "Đăng ký thành công! Bạn có thể đăng nhập ngay."
     
     except Exception as e:
@@ -130,6 +143,13 @@ def login_user(username: str, password: str) -> tuple[bool, str, Optional[Dict]]
             
             user_info = dict(row)
             conn.close()
+            
+            # Kéo dữ liệu riêng của user về
+            try:
+                with st.spinner("Đang tải dữ liệu của bạn..."):
+                    github_sync.sync_pull_user_db(username)
+            except:
+                pass
             
             return True, "Đăng nhập thành công!", user_info
         else:

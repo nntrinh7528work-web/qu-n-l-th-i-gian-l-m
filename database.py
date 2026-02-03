@@ -181,6 +181,25 @@ def init_database() -> None:
     conn.close()
 
 
+# Cờ để kiểm soát việc sync (tránh sync quá nhiều)
+ENABLE_SYNC = True
+
+def _sync_to_github():
+    """Đồng bộ database của user hiện tại lên GitHub (chạy background nếu có thể)."""
+    if not ENABLE_SYNC:
+        return
+        
+    try:
+        import streamlit as st
+        import github_sync
+        
+        if "user_info" in st.session_state and st.session_state["user_info"]:
+            username = st.session_state["user_info"]["username"]
+            # Chạy sync
+            github_sync.sync_push_user_db(username)
+    except Exception as e:
+        print(f"Sync error: {e}")
+
 # ==================== JOBS (Công việc và lương giờ) ====================
 
 def add_job(job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> int:
@@ -202,6 +221,7 @@ def add_job(job_name: str, hourly_rate: float, description: str = "", color: str
             conn.commit()
             conn.close()
             clear_cache()
+            _sync_to_github()  # Sync
             return existing[0]
         
         # Thêm mới nếu chưa tồn tại
@@ -214,6 +234,7 @@ def add_job(job_name: str, hourly_rate: float, description: str = "", color: str
         conn.commit()
         conn.close()
         clear_cache()
+        _sync_to_github()  # Sync
         return job_id
     except Exception:
         return -1
@@ -238,6 +259,7 @@ def update_job(job_id: int, job_name: str, hourly_rate: float, description: str 
         conn.commit()
         conn.close()
         clear_cache()  # Xóa cache khi cập nhật
+        _sync_to_github()  # Sync
         return True
     except Exception:
         return False
@@ -254,6 +276,7 @@ def delete_job(job_id: int) -> bool:
         conn.commit()
         conn.close()
         clear_cache()  # Xóa cache khi xóa
+        _sync_to_github()  # Sync
         return True
     except Exception:
         return False
@@ -445,6 +468,7 @@ def add_work_shift(
         shift_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        _sync_to_github()  # Sync
         return shift_id
     except Exception as e:
         print(f"Lỗi khi thêm ca làm việc: {e}")
@@ -479,6 +503,7 @@ def update_work_shift(
         
         conn.commit()
         conn.close()
+        _sync_to_github()  # Sync
         return True
     except Exception as e:
         print(f"Lỗi khi cập nhật ca làm việc: {e}")
@@ -495,6 +520,7 @@ def delete_work_shift(shift_id: int) -> bool:
         
         conn.commit()
         conn.close()
+        _sync_to_github()  # Sync
         return True
     except Exception as e:
         print(f"Lỗi khi xóa ca làm việc: {e}")
@@ -786,6 +812,7 @@ def delete_work_log(work_date: date) -> bool:
         
         conn.commit()
         conn.close()
+        _sync_to_github()  # Sync
         return True
     except Exception as e:
         print(f"Lỗi khi xóa giờ làm: {e}")
@@ -807,6 +834,7 @@ def add_holiday(holiday_date: date, description: str) -> bool:
         
         conn.commit()
         conn.close()
+        _sync_to_github()  # Sync
         return True
     except Exception as e:
         print(f"Lỗi khi thêm ngày nghỉ: {e}")
@@ -824,6 +852,7 @@ def remove_holiday(holiday_date: date) -> bool:
         
         conn.commit()
         conn.close()
+        _sync_to_github()  # Sync
         return True
     except Exception as e:
         print(f"Lỗi khi xóa ngày nghỉ: {e}")
@@ -919,6 +948,7 @@ def update_setting(key: str, value: str) -> bool:
         
         conn.commit()
         conn.close()
+        _sync_to_github()  # Sync
         return True
     except Exception as e:
         print(f"Lỗi khi cập nhật cài đặt: {e}")
