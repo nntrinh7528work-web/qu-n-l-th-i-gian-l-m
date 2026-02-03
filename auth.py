@@ -201,21 +201,36 @@ def show_login_page():
         }
         .auth-header h1 {
             font-size: 2.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    st.markdown("""
+    <style>
+        .auth-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .auth-header h1 {
+            font-size: 3rem;
+            background: linear-gradient(to right, #00C6FB, #005BEA);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="auth-header"><h1>🌷 Quản Lý Giờ Làm</h1></div>', unsafe_allow_html=True)
+    st.markdown('<div class="auth-header"><h1>🚀 Hello World</h1></div>', unsafe_allow_html=True)
     
     # Tabs đăng nhập / đăng ký
-    tab_login, tab_register = st.tabs(["🔐 Đăng Nhập", "📝 Đăng Ký"])
+    tab_login, tab_register = st.tabs(["� Login", "✨ New Account"])
     
     with tab_login:
-        st.subheader("Đăng Nhập")
+        st.subheader("Welcome Back 👋")
         
         with st.form("login_form"):
             username = st.text_input("Tên đăng nhập", placeholder="Nhập tên đăng nhập")

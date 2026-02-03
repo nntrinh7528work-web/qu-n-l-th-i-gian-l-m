@@ -34,170 +34,156 @@ import auth
 # ==================== CẤU HÌNH TRANG ====================
 
 st.set_page_config(
-    page_title="Quản Lý Giờ Làm",
-    page_icon="🌷",
+    page_title="Work Tracker Pro",
+    page_icon="🚀",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# ==================== CSS TÙY CHỈNH ====================
+# ==================== CSS TÙY CHỈNH (GEN Z STYLE) ====================
 
 st.markdown("""
 <style>
-    /* ===== Base Light Mode Styles ===== */
-    
-    /* Tiêu đề chính */
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Outfit', sans-serif;
+    }
+
+    /* Gradient Background Text */
     .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        font-size: 3rem;
+        font-weight: 800;
+        background: linear-gradient(to right, #FF0080, #FF8C00, #40E0D0);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        background-clip: text;
         text-align: center;
-        padding: 1rem 0;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
     }
-    
-    /* Card thống kê */
+
+    /* Modern Cards */
     .stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         padding: 1.5rem;
-        border-radius: 1rem;
+        border-radius: 24px;
         color: white;
         text-align: center;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     }
     
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
     .stat-card h3 {
         margin: 0;
-        font-size: 2rem;
-        font-weight: 700;
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(45deg, #fff, #ccc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
     
     .stat-card p {
-        margin: 0.5rem 0 0 0;
-        opacity: 0.9;
+        margin-top: 5px;
+        font-size: 1rem;
+        font-weight: 600;
+        opacity: 0.8;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
-    
-    /* Kết quả tính toán - Works in both modes */
+
+    /* Result Box Styled */
     .result-box {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
-        border: 2px solid #10B981;
-        border-radius: 0.75rem;
+        background: #1E1E2E; /* Dark Indigo */
+        border: 2px solid #3B82F6;
+        border-radius: 20px;
         padding: 1.5rem;
         margin: 1rem 0;
-        color: inherit;
+        box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
     }
     
-    .result-box.overtime {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
-        border-color: #F59E0B;
+    .result-box h4 {
+        color: #60A5FA;
+        font-size: 1.2rem;
+        text-transform: uppercase;
+    }
+
+    /* Buttons */
+    .stButton button {
+        border-radius: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
     }
     
-    .result-box h3 {
-        color: #10B981;
-        margin-bottom: 1rem;
+    .stButton button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
     }
-    
-    .result-box.overtime h3 {
-        color: #F59E0B;
-    }
-    
-    .result-box p {
-        margin: 0.5rem 0;
-    }
-    
-    .result-box hr {
-        border-color: rgba(128, 128, 128, 0.3);
-        margin: 1rem 0;
-    }
-    
-    /* Thông báo lỗi */
-    .error-box {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
-        border: 2px solid #EF4444;
-        border-radius: 0.75rem;
-        padding: 1rem;
-        color: #F87171;
-    }
-    
-    /* Calendar cell styles - Universal */
+
+    /* Calendar Cells */
     .cal-cell {
-        padding: 10px 8px;
-        border-radius: 10px;
+        border-radius: 16px;
+        padding: 12px;
         text-align: center;
-        margin: 3px;
-        transition: all 0.2s ease;
+        margin: 4px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
     }
     
     .cal-cell:hover {
-        transform: scale(1.05);
+        transform: scale(1.1) rotate(2deg);
+        z-index: 10;
     }
     
     .cal-cell.worked {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.2) 100%);
-        border: 2px solid #10B981;
-        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-    }
-    
-    .cal-cell.overtime {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.2) 100%);
-        border: 2px solid #F59E0B;
-        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        border: none;
+        color: white;
     }
     
     .cal-cell.holiday {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(220, 38, 38, 0.2) 100%);
-        border: 2px solid #EF4444;
-        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-    }
-    
-    .cal-cell.weekend {
-        background: rgba(107, 114, 128, 0.15);
-        border: 1px solid rgba(107, 114, 128, 0.3);
-    }
-    
-    .cal-cell.empty {
-        background: rgba(75, 85, 99, 0.1);
-        border: 1px solid rgba(75, 85, 99, 0.2);
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        border: none;
+        color: white;
     }
     
     .cal-day-num {
-        font-weight: 700;
-        font-size: 1.1rem;
+        font-weight: 800;
+        font-size: 1.2rem;
     }
     
-    .cal-day-info {
-        font-size: 0.75rem;
-        margin-top: 4px;
-    }
-    
-    /* Tab styling */
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 2rem;
+        gap: 1rem;
+        background: rgba(255,255,255,0.05);
+        padding: 10px;
+        border-radius: 20px;
     }
     
     .stTabs [data-baseweb="tab"] {
-        font-size: 1.1rem;
-        font-weight: 600;
+        height: 50px;
+        border-radius: 15px;
+        font-weight: 700;
+        font-size: 1rem;
+        border: none !important;
     }
     
-    /* Custom text colors - Works in both modes */
-    .text-success {
-        color: #34D399 !important;
-    }
-    
-    .text-warning {
-        color: #FBBF24 !important;
-    }
-    
-    .text-error {
-        color: #F87171 !important;
-    }
-    
-    .text-muted {
-        color: #9CA3AF !important;
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, #8B5CF6, #EC4899);
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -217,7 +203,7 @@ auth.show_user_info_sidebar()
 
 # ==================== HEADER ====================
 
-st.markdown('<h1 class="main-header">🌷 Quản Lý Giờ Làm ✿</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">✨ Work Tracker Pro 🚀</h1>', unsafe_allow_html=True)
 
 # ==================== DASHBOARD TỔNG QUAN ====================
 
@@ -248,52 +234,50 @@ for shift in all_shifts_month:
 total_days_month = len(work_days_set)
 
 # Hiển thị Dashboard
-st.markdown("### 📊 Thống Kê Tháng Này")
-
 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
 
 with col_d1:
     st.markdown(f"""
-    <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div class="stat-card" style="background: linear-gradient(135deg, #FF0080 0%, #7928CA 100%);">
         <h3>📅 {total_days_month}</h3>
-        <p>Ngày làm việc</p>
+        <p>Work Days</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col_d2:
     st.markdown(f"""
-    <div class="stat-card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+    <div class="stat-card" style="background: linear-gradient(135deg, #4AF699 0%, #12B886 100%);">
         <h3>⏱️ {total_hours_month:.1f}h</h3>
-        <p>Tổng giờ làm</p>
+        <p>Total Hours</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col_d3:
     st.markdown(f"""
-    <div class="stat-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
-        <h3>💴 {total_salary_month:,.0f}</h3>
-        <p>Yen (Lương dự tính)</p>
+    <div class="stat-card" style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);">
+        <h3>💸 {total_salary_month:,.0f}</h3>
+        <p>Est. Salary (Yen)</p>
     </div>
     """, unsafe_allow_html=True)
 
 with col_d4:
     avg_per_day = total_salary_month / total_days_month if total_days_month > 0 else 0
     st.markdown(f"""
-    <div class="stat-card" style="background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%);">
-        <h3>📈 {avg_per_day:,.0f}</h3>
-        <p>Yen/ngày (TB)</p>
+    <div class="stat-card" style="background: linear-gradient(135deg, #00C6FB 0%, #005BEA 100%);">
+        <h3>🔥 {avg_per_day:,.0f}</h3>
+        <p>Avg/Day</p>
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ==================== TABS ====================
 
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🌸 Nhập Giờ", 
-    "🗓️ Lịch Làm", 
-    "✨ Báo Cáo", 
-    "🎀 Cài Đặt"
+    "🎮 Play Zone", 
+    "📅 Schedule", 
+    "📈 Analytics", 
+    "⚙️ Settings"
 ])
 
 # ==================== TAB 1: NHẬP GIỜ LÀM ====================
