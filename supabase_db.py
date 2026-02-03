@@ -14,36 +14,47 @@ import os
 
 def get_supabase_client() -> Optional[Client]:
     """Lấy Supabase client từ secrets hoặc environment."""
+    url = None
+    key = None
+    
+    # Method 1: Streamlit secrets (check if key exists first)
     try:
-        # Ưu tiên lấy từ Streamlit secrets
-        url = None
-        key = None
-        
+        if hasattr(st, 'secrets'):
+            if "SUPABASE_URL" in st.secrets:
+                url = st.secrets["SUPABASE_URL"]
+            if "SUPABASE_KEY" in st.secrets:
+                key = st.secrets["SUPABASE_KEY"]
+    except Exception:
+        pass
+    
+    # Method 2: Environment variables (fallback)
+    if not url:
+        url = os.environ.get("SUPABASE_URL", "")
+    if not key:
+        key = os.environ.get("SUPABASE_KEY", "")
+    
+    # Create client if we have credentials
+    if url and key:
         try:
-            url = st.secrets["SUPABASE_URL"]
-            key = st.secrets["SUPABASE_KEY"]
-        except:
-            pass
-        
-        # Fallback: Environment variables
-        if not url:
-            url = os.environ.get("SUPABASE_URL", "")
-        if not key:
-            key = os.environ.get("SUPABASE_KEY", "")
-        
-        if url and key:
             return create_client(url, key)
-        
-        return None
-    except Exception as e:
-        print(f"Supabase connection error: {e}")
-        return None
+        except Exception as e:
+            print(f"Supabase client creation error: {e}")
+            return None
+    
+    return None
 
 
 def is_supabase_available() -> bool:
     """Kiểm tra xem Supabase có sẵn sàng không."""
-    client = get_supabase_client()
-    return client is not None
+    try:
+        client = get_supabase_client()
+        if client:
+            # Test connection with a simple query
+            client.table('users').select('id').limit(1).execute()
+            return True
+    except Exception as e:
+        print(f"Supabase availability check failed: {e}")
+    return False
 
 
 # ==================== USERS ====================

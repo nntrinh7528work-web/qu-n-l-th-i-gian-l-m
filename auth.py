@@ -261,6 +261,32 @@ def show_login_page():
         st.success("☁️ **Cloud Mode** - Dữ liệu được lưu trên Supabase")
     else:
         st.warning("💾 **Local Mode** - Dữ liệu lưu cục bộ (có thể mất khi reboot)")
+        
+        # Debug info
+        with st.expander("🔧 Debug Info (click để xem)"):
+            import os
+            has_secrets = hasattr(st, 'secrets')
+            st.write(f"- hasattr(st, 'secrets'): {has_secrets}")
+            
+            if has_secrets:
+                try:
+                    secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else "N/A"
+                    st.write(f"- Secrets keys: {secrets_keys}")
+                except:
+                    st.write("- Secrets keys: Error reading")
+                
+                try:
+                    has_url = "SUPABASE_URL" in st.secrets
+                    has_key = "SUPABASE_KEY" in st.secrets
+                    st.write(f"- SUPABASE_URL in secrets: {has_url}")
+                    st.write(f"- SUPABASE_KEY in secrets: {has_key}")
+                except Exception as e:
+                    st.write(f"- Error checking secrets: {e}")
+            
+            env_url = os.environ.get("SUPABASE_URL", "Not set")
+            env_key = os.environ.get("SUPABASE_KEY", "Not set")
+            st.write(f"- ENV SUPABASE_URL: {'Set' if env_url != 'Not set' else 'Not set'}")
+            st.write(f"- ENV SUPABASE_KEY: {'Set' if env_key != 'Not set' else 'Not set'}")
     
     # Tabs đăng nhập / đăng ký
     tab_login, tab_register = st.tabs(["👤 Đăng Nhập", "✨ Đăng Ký"])
