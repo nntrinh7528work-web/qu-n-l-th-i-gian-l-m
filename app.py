@@ -219,6 +219,74 @@ auth.show_user_info_sidebar()
 
 st.markdown('<h1 class="main-header">🌷 Quản Lý Giờ Làm ✿</h1>', unsafe_allow_html=True)
 
+# ==================== DASHBOARD TỔNG QUAN ====================
+
+# Lấy dữ liệu tháng hiện tại
+current_month = date.today().month
+current_year = date.today().year
+month_start = date(current_year, current_month, 1)
+
+# Lấy tất cả ca làm việc trong tháng
+all_shifts_month = db.get_shifts_by_range(month_start, date.today())
+all_jobs = db.get_all_jobs()
+job_map_dashboard = {j['id']: j for j in all_jobs}
+
+# Tính tổng
+total_hours_month = 0
+total_salary_month = 0
+work_days_set = set()
+
+for shift in all_shifts_month:
+    hours = shift.get('total_hours', 0)
+    job_id = shift.get('job_id', 0)
+    hourly_rate = job_map_dashboard.get(job_id, {}).get('hourly_rate', 0)
+    
+    total_hours_month += hours
+    total_salary_month += hours * hourly_rate
+    work_days_set.add(shift.get('work_date'))
+
+total_days_month = len(work_days_set)
+
+# Hiển thị Dashboard
+st.markdown("### 📊 Thống Kê Tháng Này")
+
+col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+
+with col_d1:
+    st.markdown(f"""
+    <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <h3>📅 {total_days_month}</h3>
+        <p>Ngày làm việc</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_d2:
+    st.markdown(f"""
+    <div class="stat-card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+        <h3>⏱️ {total_hours_month:.1f}h</h3>
+        <p>Tổng giờ làm</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_d3:
+    st.markdown(f"""
+    <div class="stat-card" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+        <h3>💴 {total_salary_month:,.0f}</h3>
+        <p>Yen (Lương dự tính)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_d4:
+    avg_per_day = total_salary_month / total_days_month if total_days_month > 0 else 0
+    st.markdown(f"""
+    <div class="stat-card" style="background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%);">
+        <h3>📈 {avg_per_day:,.0f}</h3>
+        <p>Yen/ngày (TB)</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+
 # ==================== TABS ====================
 
 tab1, tab2, tab3, tab4 = st.tabs([
