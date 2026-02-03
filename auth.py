@@ -200,19 +200,6 @@ def show_login_page():
             margin-bottom: 2rem;
         }
         .auth-header h1 {
-            font-size: 2.5rem;
-    st.markdown("""
-    <style>
-        .auth-container {
-            max-width: 400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        .auth-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .auth-header h1 {
             font-size: 3rem;
             background: linear-gradient(to right, #00C6FB, #005BEA);
             -webkit-background-clip: text;
@@ -227,7 +214,7 @@ def show_login_page():
     st.markdown('<div class="auth-header"><h1>🚀 Hello World</h1></div>', unsafe_allow_html=True)
     
     # Tabs đăng nhập / đăng ký
-    tab_login, tab_register = st.tabs(["� Login", "✨ New Account"])
+    tab_login, tab_register = st.tabs(["👤 Login", "✨ New Account"])
     
     with tab_login:
         st.subheader("Welcome Back 👋")
