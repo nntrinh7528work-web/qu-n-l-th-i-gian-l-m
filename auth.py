@@ -297,14 +297,18 @@ def show_login_page():
         
         st.write("**Kết quả kiểm tra Supabase:**")
         st.write(f"- _check_supabase(): `{is_cloud}`")
+        st.write(f"- _SUPABASE_MODULE_OK: `{_SUPABASE_MODULE_OK}`")
         
         # Show last error if available
-        if _SUPABASE_MODULE_OK and not is_cloud:
-            try:
-                last_err = supabase_db.get_last_error()
-                st.error(f"**Lỗi Supabase:** `{last_err}`")
-            except:
-                pass
+        if not is_cloud:
+            if _SUPABASE_MODULE_OK:
+                try:
+                    last_err = supabase_db.get_last_error()
+                    st.error(f"**Lỗi Supabase:** `{last_err}`")
+                except Exception as ex:
+                    st.error(f"**Lỗi khi lấy error:** `{ex}`")
+            else:
+                st.error("**Lỗi:** Không thể import supabase_db module")
     
     # Tabs đăng nhập / đăng ký
     tab_login, tab_register = st.tabs(["👤 Đăng Nhập", "✨ Đăng Ký"])
