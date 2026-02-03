@@ -20,8 +20,21 @@ try:
 except:
     pass
 
-# Đường dẫn database
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "work_hours.db")
+# Đường dẫn database mặc định (sẽ được ghi đè bởi user-specific path)
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "work_hours.db")
+
+def get_db_path() -> str:
+    """Lấy đường dẫn database. Ưu tiên database của user nếu đã đăng nhập."""
+    try:
+        import streamlit as st
+        if "user_db_path" in st.session_state and st.session_state["user_db_path"]:
+            return st.session_state["user_db_path"]
+    except:
+        pass
+    return DEFAULT_DB_PATH
+
+# Alias cho tương thích
+DB_PATH = DEFAULT_DB_PATH
 
 # Cache đơn giản để tối ưu đọc database
 _cache = {}
@@ -50,7 +63,12 @@ def clear_cache():
 
 def get_connection() -> sqlite3.Connection:
     """Tạo kết nối đến database."""
-    conn = sqlite3.connect(DB_PATH)
+    db_path = get_db_path()
+    # Đảm bảo thư mục tồn tại
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row  # Cho phép truy cập cột theo tên
     return conn
 
@@ -919,5 +937,5 @@ def get_default_break_hours() -> float:
     return float(value) if value else 1.0
 
 
-# Khởi tạo database khi import module
-init_database()
+# Note: Database khởi tạo được gọi trong app.py sau khi user đăng nhập
+# để đảm bảo sử dụng đúng database path của user

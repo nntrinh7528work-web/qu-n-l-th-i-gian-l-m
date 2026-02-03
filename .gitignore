@@ -18,3 +18,6 @@ Thumbs.db
 
 # Local database (will be recreated on cloud)
 # work_hours.db
+
+# User data - mỗi user có database riêng
+user_data/

@@ -29,6 +29,7 @@ from io import BytesIO
 # Import các module nội bộ
 import database as db
 import calculations as calc
+import auth
 
 # ==================== CẤU HÌNH TRANG ====================
 
@@ -200,6 +201,19 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ==================== KIỂM TRA ĐĂNG NHẬP ====================
+
+# Hiển thị trang đăng nhập nếu chưa đăng nhập
+if not auth.is_logged_in():
+    auth.show_login_page()
+    st.stop()
+
+# Đã đăng nhập - khởi tạo database cho user
+db.init_database()
+
+# Hiển thị thông tin user ở sidebar
+auth.show_user_info_sidebar()
 
 # ==================== HEADER ====================
 
