@@ -203,7 +203,7 @@ auth.show_user_info_sidebar()
 
 # ==================== HEADER ====================
 
-st.markdown('<h1 class="main-header">✨ Work Tracker Pro 🚀</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">✨ Quản Lý Giờ Làm 🚀</h1>', unsafe_allow_html=True)
 
 # ==================== DASHBOARD TỔNG QUAN ====================
 
@@ -240,7 +240,7 @@ with col_d1:
     st.markdown(f"""
     <div class="stat-card" style="background: linear-gradient(135deg, #FF0080 0%, #7928CA 100%);">
         <h3>📅 {total_days_month}</h3>
-        <p>Work Days</p>
+        <p>Ngày làm</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -248,7 +248,7 @@ with col_d2:
     st.markdown(f"""
     <div class="stat-card" style="background: linear-gradient(135deg, #4AF699 0%, #12B886 100%);">
         <h3>⏱️ {total_hours_month:.1f}h</h3>
-        <p>Total Hours</p>
+        <p>Tổng giờ</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -256,7 +256,7 @@ with col_d3:
     st.markdown(f"""
     <div class="stat-card" style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);">
         <h3>💸 {total_salary_month:,.0f}</h3>
-        <p>Est. Salary (Yen)</p>
+        <p>Lương (Yen)</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -265,7 +265,7 @@ with col_d4:
     st.markdown(f"""
     <div class="stat-card" style="background: linear-gradient(135deg, #00C6FB 0%, #005BEA 100%);">
         <h3>🔥 {avg_per_day:,.0f}</h3>
-        <p>Avg/Day</p>
+        <p>TB/ngày</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -274,16 +274,104 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ==================== TABS ====================
 
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🎮 Play Zone", 
-    "📅 Schedule", 
-    "📈 Analytics", 
-    "⚙️ Settings"
+    "🎮 Nhập Giờ", 
+    "📅 Lịch Làm", 
+    "📈 Báo Cáo", 
+    "⚙️ Cài Đặt"
 ])
 
 # ==================== TAB 1: NHẬP GIỜ LÀM ====================
 
 with tab1:
-    st.header("🌸 Nhập Giờ Làm Việc")
+    st.header("🎮 Nhập Giờ Làm Việc")
+    
+    # ==================== QUICK ENTRY MODE ====================
+    st.markdown("### ⚡ Quick Entry - Log Nhanh")
+    
+    # Lấy danh sách công việc cho quick entry
+    quick_jobs = db.get_all_jobs()
+    quick_job_map = {j['id']: j for j in quick_jobs}
+    
+    if quick_jobs:
+        quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
+        
+        # Lấy job đầu tiên làm mặc định
+        default_job = quick_jobs[0] if quick_jobs else None
+        
+        with quick_col1:
+            if st.button("☀️ Ca Sáng 8h\n(8:00-17:00)", use_container_width=True, key="quick_morning"):
+                if default_job:
+                    shift_id = db.add_work_shift(
+                        work_date=date.today(),
+                        shift_name="Ca Sáng",
+                        start_time="08:00",
+                        end_time="17:00",
+                        break_hours=1.0,
+                        total_hours=8.0,
+                        notes="Quick Entry",
+                        job_id=default_job['id']
+                    )
+                    if shift_id > 0:
+                        st.success("✅ Đã log ca sáng 8h!")
+                        st.rerun()
+        
+        with quick_col2:
+            if st.button("🌙 Ca Tối 8h\n(17:00-02:00)", use_container_width=True, key="quick_evening"):
+                if default_job:
+                    shift_id = db.add_work_shift(
+                        work_date=date.today(),
+                        shift_name="Ca Tối",
+                        start_time="17:00",
+                        end_time="02:00",
+                        break_hours=1.0,
+                        total_hours=8.0,
+                        notes="Quick Entry",
+                        job_id=default_job['id']
+                    )
+                    if shift_id > 0:
+                        st.success("✅ Đã log ca tối 8h!")
+                        st.rerun()
+        
+        with quick_col3:
+            if st.button("⏰ Part-time 4h\n(17:00-21:00)", use_container_width=True, key="quick_parttime"):
+                if default_job:
+                    shift_id = db.add_work_shift(
+                        work_date=date.today(),
+                        shift_name="Part-time",
+                        start_time="17:00",
+                        end_time="21:00",
+                        break_hours=0.0,
+                        total_hours=4.0,
+                        notes="Quick Entry",
+                        job_id=default_job['id']
+                    )
+                    if shift_id > 0:
+                        st.success("✅ Đã log part-time 4h!")
+                        st.rerun()
+        
+        with quick_col4:
+            if st.button("🔥 Full Day 10h\n(8:00-19:00)", use_container_width=True, key="quick_fullday"):
+                if default_job:
+                    shift_id = db.add_work_shift(
+                        work_date=date.today(),
+                        shift_name="Full Day",
+                        start_time="08:00",
+                        end_time="19:00",
+                        break_hours=1.0,
+                        total_hours=10.0,
+                        notes="Quick Entry",
+                        job_id=default_job['id']
+                    )
+                    if shift_id > 0:
+                        st.success("✅ Đã log full day 10h!")
+                        st.rerun()
+        
+        st.caption(f"💡 Quick Entry sẽ log vào **{default_job['job_name']}** cho **hôm nay**")
+    
+    st.markdown("---")
+    
+    # ==================== NHẬP CHI TIẾT ====================
+    st.markdown("### 📝 Nhập Chi Tiết")
     
     # Chọn ngày
     work_date = st.date_input(
@@ -1120,36 +1208,82 @@ with tab3:
             # Xuất Excel
             st.subheader("📤 Xuất Báo Cáo")
             
-            # Chuẩn bị dữ liệu xuất (không có OT)
-            df_export = pd.DataFrame(report_logs)
-            df_export['work_date'] = pd.to_datetime(df_export['work_date']).dt.strftime('%d/%m/%Y')
-            df_export = df_export[['work_date', 'start_time', 'end_time', 'break_hours', 'total_hours', 'notes']]
-            df_export.columns = ['Ngay', 'Gio bat dau', 'Gio ket thuc', 'Nghi (gio)', 'Tong gio', 'Ghi chu']
+            # Lấy tất cả shifts để tính lương
+            export_shifts = db.get_shifts_by_range(report_start, report_end)
+            all_jobs_export = db.get_all_jobs()
+            job_map_export = {j['id']: j for j in all_jobs_export}
             
-            # Thêm dòng tổng kết
-            summary_row = pd.DataFrame([{
-                'Ngày': 'TỔNG CỘNG',
-                'Giờ bắt đầu': '',
-                'Giờ kết thúc': '',
-                'Nghỉ (giờ)': '',
-                'Tổng giờ': report['total_hours'],
-                'Ghi chú': ''
-            }])
-            df_export = pd.concat([df_export, summary_row], ignore_index=True)
+            # Chuẩn bị dữ liệu xuất với cột lương
+            export_data = []
+            total_salary_export = 0
             
-            # Tạo file Excel
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_export.to_excel(writer, sheet_name='Bao Cao Gio Lam', index=False)
+            for shift in export_shifts:
+                job_id = shift.get('job_id', 1)
+                job_info = job_map_export.get(job_id, {'job_name': 'N/A', 'hourly_rate': 0})
+                salary = shift['total_hours'] * job_info['hourly_rate']
+                total_salary_export += salary
+                
+                export_data.append({
+                    'Ngày': shift['work_date'],
+                    'Ca làm': shift['shift_name'],
+                    'Nơi làm': job_info['job_name'],
+                    'Giờ BĐ': shift['start_time'],
+                    'Giờ KT': shift['end_time'],
+                    'Nghỉ (h)': shift['break_hours'],
+                    'Tổng giờ': shift['total_hours'],
+                    'Lương/h': job_info['hourly_rate'],
+                    'Lương ca': salary,
+                    'Ghi chú': shift.get('notes', '')
+                })
             
-            excel_data = output.getvalue()
-            
-            st.download_button(
-                label="💾 Tải Xuống File Excel",
-                data=excel_data,
-                file_name=f"bao_cao_gio_lam_{report_start.strftime('%d%m%Y')}_{report_end.strftime('%d%m%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            if export_data:
+                df_export = pd.DataFrame(export_data)
+                
+                # Thêm dòng tổng kết
+                summary_row = {
+                    'Ngày': 'TỔNG CỘNG',
+                    'Ca làm': '',
+                    'Nơi làm': '',
+                    'Giờ BĐ': '',
+                    'Giờ KT': '',
+                    'Nghỉ (h)': '',
+                    'Tổng giờ': sum(s['total_hours'] for s in export_shifts),
+                    'Lương/h': '',
+                    'Lương ca': total_salary_export,
+                    'Ghi chú': ''
+                }
+                df_export = pd.concat([df_export, pd.DataFrame([summary_row])], ignore_index=True)
+                
+                # Tạo file Excel
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_export.to_excel(writer, sheet_name='Bao Cao Gio Lam', index=False)
+                
+                excel_data = output.getvalue()
+                
+                col_export1, col_export2 = st.columns(2)
+                
+                with col_export1:
+                    st.download_button(
+                        label="💾 Tải Excel",
+                        data=excel_data,
+                        file_name=f"bao_cao_{report_start.strftime('%d%m%Y')}_{report_end.strftime('%d%m%Y')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                
+                with col_export2:
+                    # Export CSV
+                    csv_data = df_export.to_csv(index=False).encode('utf-8-sig')
+                    st.download_button(
+                        label="📄 Tải CSV",
+                        data=csv_data,
+                        file_name=f"bao_cao_{report_start.strftime('%d%m%Y')}_{report_end.strftime('%d%m%Y')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                
+                st.success(f"📊 Tổng lương trong kỳ: **{total_salary_export:,.0f} Yen**")
             
             # ==================== TÍNH LƯƠNG ====================
             st.markdown("---")
