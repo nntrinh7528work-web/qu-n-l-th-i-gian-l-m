@@ -16,15 +16,21 @@ def get_supabase_client() -> Optional[Client]:
     """Lấy Supabase client từ secrets hoặc environment."""
     try:
         # Ưu tiên lấy từ Streamlit secrets
-        if hasattr(st, 'secrets'):
-            url = st.secrets.get("SUPABASE_URL", "")
-            key = st.secrets.get("SUPABASE_KEY", "")
-            if url and key:
-                return create_client(url, key)
+        url = None
+        key = None
+        
+        try:
+            url = st.secrets["SUPABASE_URL"]
+            key = st.secrets["SUPABASE_KEY"]
+        except:
+            pass
         
         # Fallback: Environment variables
-        url = os.environ.get("SUPABASE_URL", "")
-        key = os.environ.get("SUPABASE_KEY", "")
+        if not url:
+            url = os.environ.get("SUPABASE_URL", "")
+        if not key:
+            key = os.environ.get("SUPABASE_KEY", "")
+        
         if url and key:
             return create_client(url, key)
         
