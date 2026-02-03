@@ -21,3 +21,6 @@ Thumbs.db
 
 # User data - mỗi user có database riêng
 user_data/
+
+# Secrets (DO NOT COMMIT!)
+.streamlit/secrets.toml

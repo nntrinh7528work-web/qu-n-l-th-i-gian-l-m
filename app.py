@@ -27,7 +27,7 @@ import calendar
 from io import BytesIO
 
 # Import các module nội bộ
-import database as db
+import db_wrapper as db  # Tự động chọn Supabase hoặc SQLite
 import calculations as calc
 import auth
 
