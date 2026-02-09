@@ -1,6 +1,7 @@
-# 📌 Quản Lý Giờ Làm
+# 📌 Quản Lý Giờ Làm (Work Hours Tracker)
 
 Ứng dụng quản lý giờ làm việc, tính toán giờ làm thêm, và tùy chỉnh lịch làm.
+Phiên bản mới hỗ trợ **nhiều ca làm việc trong một ngày** và **phân loại công việc**.
 
 ## 🚀 Cài Đặt
 
@@ -25,87 +26,61 @@
    streamlit run app.py
    ```
 
-4. **Truy cập ứng dụng**: Mở trình duyệt và vào địa chỉ:
-   ```
-   http://localhost:8501
-   ```
+4. **Truy cập ứng dụng**: Mở trình duyệt và vào địa chỉ: `http://localhost:8501`
+
+---
+
+## 🔄 Nâng Cấp Từ Bản Cũ
+
+Nếu bạn đang dùng phiên bản cũ, vui lòng chạy lệnh sau để cập nhật dữ liệu:
+```bash
+python migration_script.py
+```
+Xem chi tiết tại [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md).
+
+---
 
 ## 📖 Hướng Dẫn Sử Dụng
 
 ### Tab 1: 📝 Nhập Giờ Làm
+- Chọn **Công việc** (Làm thêm, Chính thức, v.v.)
 - Chọn ngày làm việc
-- Nhập giờ bắt đầu và giờ kết thúc
-- Điều chỉnh giờ nghỉ nếu cần
-- Thêm ghi chú (tùy chọn)
-- Nhấn **"Lưu Giờ Làm"** để lưu
+- Nhập giờ bắt đầu và giờ kết thúc (Hỗ trợ ca qua đêm, ví dụ 22:00 hôm nay đến 06:00 hôm sau)
+- Nhấn **"Lưu Ca Làm"**
 
 ### Tab 2: 📅 Lịch Làm
-- Chọn tháng/năm để xem
-- Xem lịch theo dạng **Lịch tháng** hoặc **Danh sách**
-- Màu sắc chú thích:
-  - 🟢 Xanh: Làm đủ giờ
-  - 🟡 Vàng: Có làm thêm (OT)
-  - 🔴 Đỏ: Ngày nghỉ lễ
+- Xem lịch làm việc trực quan theo tháng.
+- Hiển thị ngày nghỉ, ngày có tăng ca.
 
 ### Tab 3: 📊 Báo Cáo
-- Chọn khoảng thời gian cần báo cáo
-- Xem thống kê tổng quan
-- Xem biểu đồ trực quan
-- **Tải xuống file Excel** để lưu trữ hoặc in
+- Thống kê tổng giờ làm, tổng lương (ước tính).
+- Tải báo cáo dạng Excel/CSV.
 
-### Tab 4: ⚙️ Tùy Chỉnh
-- Thay đổi **giờ làm chuẩn** (mặc định: 8 giờ)
-- Thay đổi **giờ nghỉ mặc định** (mặc định: 1 giờ)
-- Quản lý **ngày nghỉ lễ**:
-  - Thêm ngày nghỉ mới
-  - Xóa ngày nghỉ
-  - Thêm nhanh các ngày lễ Việt Nam
+### Tab 4: ⚙️ Cài Đặt
+- Quản lý danh sách **Công việc** (Thêm/Sửa/Xóa, đặt màu sắc, lương giờ).
+- Cài đặt giờ làm chuẩn, giờ nghỉ.
+
+---
 
 ## 📁 Cấu Trúc Thư Mục
 
 ```
 quan_ly_gio_lam/
-├── app.py              # Ứng dụng chính
-├── database.py         # Quản lý cơ sở dữ liệu SQLite
-├── calculations.py     # Các hàm tính toán thời gian
-├── requirements.txt    # Danh sách thư viện cần thiết
-├── README.md           # Tài liệu hướng dẫn
-└── work_hours.db       # Cơ sở dữ liệu (tự động tạo khi chạy)
+├── app.py                 # Ứng dụng chính (Streamlit UI)
+├── database.py           # Core Database Logic (SQLite) - Đã fix lỗi
+├── db_wrapper.py         # Wrapper (Switch giữa SQLite/Supabase)
+├── calculations.py       # Logic tính toán giờ - Đã optimize
+├── user_auth.py          # Xác thực người dùng
+├── migration_script.py   # Script chuyển đổi dữ liệu
+├── test_database.py      # Unit tests
+├── requirements.txt      # Dependencies
+└── README.md             # Tài liệu này
 ```
 
-## 💾 Dữ Liệu
-
-- Dữ liệu được lưu trong file `work_hours.db` (SQLite)
-- File này được tạo tự động khi chạy ứng dụng lần đầu
-- Để sao lưu dữ liệu, chỉ cần copy file `work_hours.db`
-
-## 🛠️ Khắc Phục Sự Cố
-
-### Lỗi "Module not found"
-```bash
-pip install streamlit pandas plotly openpyxl
-```
-
-### Lỗi khi mở trình duyệt
-- Kiểm tra xem port 8501 có bị chiếm không
-- Thử chạy với port khác:
-  ```bash
-  streamlit run app.py --server.port 8502
-  ```
-
-### Dữ liệu không hiển thị
-- Kiểm tra file `work_hours.db` có tồn tại không
-- Thử xóa file `work_hours.db` và chạy lại (dữ liệu sẽ bị mất)
+## 🐛 Fixes & Improvements
+- Đã sửa lỗi "Table not found".
+- Đã thêm chức năng quản lý nhiều Job.
+- Đã tối ưu hóa tính toán ca đêm.
 
 ## 📞 Hỗ Trợ
-
-Nếu gặp vấn đề, hãy kiểm tra:
-1. Python version: `python --version`
-2. Pip version: `pip --version`
-3. Các thư viện đã cài: `pip list`
-
----
-
-**Phiên bản:** 1.0  
-**Ngôn ngữ:** Tiếng Việt  
-**Nền tảng:** Web (Streamlit)
+Nếu gặp vấn đề, vui lòng kiểm tra file `CHANGELOG.md` hoặc chạy `test_database.py` để debug.

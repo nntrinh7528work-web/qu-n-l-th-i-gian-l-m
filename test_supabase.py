@@ -43,7 +43,7 @@ print("TEST 3: Check auth module")
 print("=" * 50)
 
 try:
-    import auth
+    import user_auth as auth
     result = auth._check_supabase()
     print(f"auth._check_supabase() = {result}")
 except Exception as e:

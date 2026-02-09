@@ -222,7 +222,7 @@ def get_current_user_id() -> Optional[int]:
     return None
 
 
-@st.cache_resource(experimental_allow_widgets=True)
+@st.cache_resource
 def get_cookie_manager():
     if not _COOKIE_MANAGER_OK or stx is None:
         return None
@@ -466,3 +466,24 @@ def show_login_page():
                         st.error(message)
                 else:
                     st.warning("Vui lòng nhập đầy đủ thông tin")
+
+
+def show_user_info_sidebar():
+    """Hiển thị thông tin user ở sidebar."""
+    user = get_current_user()
+    if user:
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown(f"### 👋 Xin chào,\n**{user.get('display_name') or user.get('username')}**")
+            
+            # Hiển thị mode database
+            if is_using_supabase():
+                st.caption("☁️ Cloud Mode")
+            else:
+                st.caption("💾 Local Mode")
+                
+            st.markdown("---")
+            
+            if st.button("🚪 Đăng xuất", key="sidebar_logout", use_container_width=True):
+                logout()
+                st.rerun()

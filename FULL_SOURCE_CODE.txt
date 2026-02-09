@@ -1,3 +1,6 @@
+==================================================
+FILE: app.py
+==================================================
 ﻿# -*- coding: utf-8 -*-
 """
 Ứng Dụng Quản Lý Giờ Làm
@@ -1690,4 +1693,2071 @@ with st.sidebar:
     
     # Version info
     st.caption("© 2024 - Phát triển bởi AI")
+
+
+
+==================================================
+FILE: user_auth.py
+==================================================
+# -*- coding: utf-8 -*-
+"""
+Module xác thực người dùng cho ứng dụng Quản Lý Giờ Làm.
+Hỗ trợ cả Supabase (cloud) và SQLite (local fallback).
+"""
+
+import streamlit as st
+import hashlib
+import os
+import sqlite3
+import sqlite3
+try:
+    import extra_streamlit_components as stx
+    _COOKIE_MANAGER_OK = True
+except ImportError:
+    stx = None
+    _COOKIE_MANAGER_OK = False
+from datetime import datetime, timedelta
+from typing import Optional, Dict
+
+# Thử import Supabase module
+try:
+    import supabase_db
+    _SUPABASE_MODULE_OK = True
+except:
+    _SUPABASE_MODULE_OK = False
+
+def _check_supabase() -> bool:
+    """Kiểm tra Supabase có sẵn không (gọi mỗi lần, không cache)."""
+    if not _SUPABASE_MODULE_OK:
+        return False
+    try:
+        return supabase_db.is_supabase_available()
+    except:
+        return False
+
+# Đường dẫn thư mục chứa database của users (for SQLite fallback)
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_data")
+
+# Đảm bảo thư mục tồn tại
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
+
+def get_users_db_path() -> str:
+    """Lấy đường dẫn database chứa thông tin users."""
+    return os.path.join(DATA_DIR, "users.db")
+
+
+def get_user_db_path(username: str) -> str:
+    """Lấy đường dẫn database riêng của user."""
+    safe_username = "".join(c for c in username.lower() if c.isalnum() or c == "_")
+    return os.path.join(DATA_DIR, f"user_{safe_username}.db")
+
+
+def init_users_db() -> None:
+    """Khởi tạo database users (SQLite)."""
+    conn = sqlite3.connect(get_users_db_path())
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            display_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+
+def hash_password(password: str) -> str:
+    """Mã hóa mật khẩu."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def is_using_supabase() -> bool:
+    """Kiểm tra có đang dùng Supabase không."""
+    return _check_supabase()
+
+
+def register_user(username: str, password: str, display_name: str = "") -> tuple:
+    """
+    Đăng ký người dùng mới.
+    
+    Returns:
+        (success, message)
+    """
+    # Validate input
+    if len(username) < 3:
+        return False, "Tên đăng nhập phải có ít nhất 3 ký tự"
+    
+    if len(password) < 4:
+        return False, "Mật khẩu phải có ít nhất 4 ký tự"
+    
+    if not username.replace("_", "").isalnum():
+        return False, "Tên đăng nhập chỉ được chứa chữ cái, số và gạch dưới"
+    
+    password_hash = hash_password(password)
+    display = display_name if display_name else username
+    
+    # Thử Supabase trước
+    if _check_supabase():
+        try:
+            # Check if user exists
+            existing = supabase_db.get_user_by_username(username)
+            if existing:
+                return False, "Tên đăng nhập đã tồn tại"
+            
+            # Create user
+            user = supabase_db.create_user(username, password_hash, display)
+            if user:
+                # Init default data
+                supabase_db.init_user_default_data(user['id'])
+                return True, "Đăng ký thành công! Bạn có thể đăng nhập ngay."
+            else:
+                return False, "Lỗi khi tạo tài khoản"
+        except Exception as e:
+            return False, f"Lỗi: {str(e)}"
+    
+    # Fallback to SQLite
+    try:
+        init_users_db()
+        
+        conn = sqlite3.connect(get_users_db_path())
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id FROM users WHERE username = ?", (username.lower(),))
+        if cursor.fetchone():
+            conn.close()
+            return False, "Tên đăng nhập đã tồn tại"
+        
+        cursor.execute("""
+            INSERT INTO users (username, password_hash, display_name)
+            VALUES (?, ?, ?)
+        """, (username.lower(), password_hash, display))
+        
+        conn.commit()
+        conn.close()
+        
+        return True, "Đăng ký thành công! Bạn có thể đăng nhập ngay."
+    
+    except Exception as e:
+        return False, f"Lỗi: {str(e)}"
+
+
+def login_user(username: str, password: str) -> tuple:
+    """
+    Đăng nhập người dùng.
+    
+    Returns:
+        (success, message, user_info)
+    """
+    password_hash = hash_password(password)
+    
+    # Thử Supabase trước
+    if _check_supabase():
+        try:
+            user = supabase_db.get_user_by_username(username)
+            if user and user['password_hash'] == password_hash:
+                supabase_db.update_user_last_login(user['id'])
+                return True, "Đăng nhập thành công!", user
+            else:
+                return False, "Tên đăng nhập hoặc mật khẩu không đúng", None
+        except Exception as e:
+            return False, f"Lỗi: {str(e)}", None
+    
+    # Fallback to SQLite
+    try:
+        init_users_db()
+        
+        conn = sqlite3.connect(get_users_db_path())
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM users WHERE username = ? AND password_hash = ?
+        """, (username.lower(), password_hash))
+        
+        row = cursor.fetchone()
+        
+        if row:
+            cursor.execute("""
+                UPDATE users SET last_login = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (row['id'],))
+            conn.commit()
+            
+            user_info = dict(row)
+            conn.close()
+            
+            return True, "Đăng nhập thành công!", user_info
+        else:
+            conn.close()
+            return False, "Tên đăng nhập hoặc mật khẩu không đúng", None
+    
+    except Exception as e:
+        return False, f"Lỗi: {str(e)}", None
+
+
+def is_logged_in() -> bool:
+    """Kiểm tra người dùng đã đăng nhập chưa."""
+    return st.session_state.get("logged_in", False) and st.session_state.get("user_info") is not None
+
+
+def get_current_user() -> Optional[Dict]:
+    """Lấy thông tin người dùng hiện tại."""
+    if is_logged_in():
+        return st.session_state.get("user_info")
+    return None
+
+
+def get_current_user_id() -> Optional[int]:
+    """Lấy user_id của người dùng hiện tại."""
+    user = get_current_user()
+    if user:
+        return user.get('id')
+    return None
+
+
+@st.cache_resource
+def get_cookie_manager():
+    if not _COOKIE_MANAGER_OK or stx is None:
+        return None
+    try:
+        return stx.CookieManager(key="auth_cookie_manager")
+    except:
+        return None
+
+
+def set_remember_me_cookie(username: str, password_hash: str):
+    """Lưu cookie đăng nhập (30 ngày)."""
+    if not _COOKIE_MANAGER_OK:
+        return
+        
+    try:
+        cookie_manager = get_cookie_manager()
+        if cookie_manager:
+            # Token format: username|password_hash
+            token = f"{username}|{password_hash}"
+            expires = datetime.now() + timedelta(days=30)
+            cookie_manager.set("work_tracker_token", token, expires_at=expires)
+    except:
+        pass
+
+
+def check_auto_login() -> bool:
+    """Kiểm tra cookie để login tự động."""
+    if is_logged_in():
+        return True
+
+    if not _COOKIE_MANAGER_OK:
+        return False
+
+    try:
+        cookie_manager = get_cookie_manager()
+        if not cookie_manager:
+            return False
+            
+        cookies = cookie_manager.get_all()
+        token = cookies.get("work_tracker_token")
+        
+        if token and "|" in token:
+            username, pw_hash = token.split("|", 1)
+            
+            # Verify with DB
+            if _check_supabase():
+               user = supabase_db.get_user_by_username(username)
+               if user and user['password_hash'] == pw_hash:
+                   st.session_state["logged_in"] = True
+                   st.session_state["user_info"] = user
+                   st.session_state["user_db_path"] = None
+                   supabase_db.update_user_last_login(user['id'])
+                   return True
+            else:
+                # Local SQLite verification
+                init_users_db()
+                conn = sqlite3.connect(get_users_db_path())
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM users WHERE username = ? AND password_hash = ?", (username, pw_hash))
+                row = cursor.fetchone()
+                conn.close()
+                
+                if row:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user_info"] = dict(row)
+                    st.session_state["user_db_path"] = get_user_db_path(username)
+                    
+                    # Update last login
+                    conn = sqlite3.connect(get_users_db_path())
+                    conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", (row['id'],))
+                    conn.commit()
+                    conn.close()
+                    return True
+    except Exception as e:
+        print(f"Auto login error: {e}")
+        
+    return False
+
+
+def logout():
+    """Đăng xuất người dùng."""
+    st.session_state["logged_in"] = False
+    st.session_state["user_info"] = None
+    st.session_state["user_db_path"] = None
+    
+    # Xóa Cookie
+    if _COOKIE_MANAGER_OK:
+        try:
+            cookie_manager = get_cookie_manager()
+            if cookie_manager:
+                cookie_manager.delete("work_tracker_token")
+        except:
+            pass
+
+
+def show_login_page():
+    """Hiển thị trang đăng nhập/đăng ký."""
+    
+    st.markdown("""
+    <style>
+        .auth-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .auth-header h1 {
+            font-size: 3rem;
+            background: linear-gradient(to right, #00C6FB, #005BEA);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .db-status {
+            text-align: center;
+            padding: 0.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="auth-header"><h1>🚀 Quản Lý Giờ Làm</h1></div>', unsafe_allow_html=True)
+    
+    # Hiển thị trạng thái database
+    is_cloud = _check_supabase()
+    if is_cloud:
+        st.success("☁️ **Cloud Mode** - Dữ liệu được lưu trên Supabase")
+    else:
+        st.warning("💾 **Local Mode** - Dữ liệu lưu cục bộ (có thể mất khi reboot)")
+    
+    # Debug info - LUÔN HIỂN THỊ
+    with st.expander("🔧 Debug Info - Kiểm tra kết nối", expanded=not is_cloud):
+        import os
+        st.write("**Kiểm tra Streamlit Secrets:**")
+        has_secrets = hasattr(st, 'secrets')
+        st.write(f"- hasattr(st, 'secrets'): `{has_secrets}`")
+        
+        if has_secrets:
+            try:
+                secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else "N/A"
+                st.write(f"- Secrets keys: `{secrets_keys}`")
+            except Exception as e:
+                st.write(f"- Secrets keys: Error - `{e}`")
+            
+            try:
+                has_url = "SUPABASE_URL" in st.secrets
+                has_key = "SUPABASE_KEY" in st.secrets
+                st.write(f"- SUPABASE_URL in secrets: `{has_url}`")
+                st.write(f"- SUPABASE_KEY in secrets: `{has_key}`")
+                
+                if has_url:
+                    url_val = st.secrets["SUPABASE_URL"]
+                    st.write(f"- SUPABASE_URL value: `{url_val[:30]}...`")
+            except Exception as e:
+                st.write(f"- Error checking secrets: `{e}`")
+        
+        st.write("**Kiểm tra Environment Variables:**")
+        env_url = os.environ.get("SUPABASE_URL", "")
+        env_key = os.environ.get("SUPABASE_KEY", "")
+        st.write(f"- ENV SUPABASE_URL: `{'Set (' + env_url[:20] + '...)' if env_url else 'Not set'}`")
+        st.write(f"- ENV SUPABASE_KEY: `{'Set' if env_key else 'Not set'}`")
+        
+        st.write("**Kết quả kiểm tra Supabase:**")
+        st.write(f"- _check_supabase(): `{is_cloud}`")
+        st.write(f"- _SUPABASE_MODULE_OK: `{_SUPABASE_MODULE_OK}`")
+        
+        # Show last error if available
+        if not is_cloud:
+            if _SUPABASE_MODULE_OK:
+                try:
+                    last_err = supabase_db.get_last_error()
+                    st.error(f"**Lỗi Supabase:** `{last_err}`")
+                except Exception as ex:
+                    st.error(f"**Lỗi khi lấy error:** `{ex}`")
+            else:
+                st.error("**Lỗi:** Không thể import supabase_db module")
+    
+    # Tabs đăng nhập / đăng ký
+    tab_login, tab_register = st.tabs(["👤 Đăng Nhập", "✨ Đăng Ký"])
+    
+    with tab_login:
+        st.subheader("Chào mừng trở lại 👋")
+        
+        with st.form("login_form"):
+            username = st.text_input("Tên đăng nhập", placeholder="Nhập tên đăng nhập")
+            password = st.text_input("Mật khẩu", type="password", placeholder="Nhập mật khẩu")
+            
+            remember_me = False
+            if _COOKIE_MANAGER_OK:
+                remember_me = st.checkbox("Ghi nhớ đăng nhập (30 ngày)")
+            
+            submit = st.form_submit_button("Đăng Nhập", use_container_width=True, type="primary")
+            
+            if submit:
+                if username and password:
+                    success, message, user_info = login_user(username, password)
+                    
+                    if success:
+                        st.session_state["logged_in"] = True
+                        st.session_state["user_info"] = user_info
+                        st.session_state["user_db_path"] = get_user_db_path(username)
+                        
+                        if remember_me:
+                            set_remember_me_cookie(username, user_info['password_hash'])
+                            st.toast("Đã ghi nhớ đăng nhập!")
+                        
+                        st.success(message)
+                        st.rerun()
+                    else:
+                        st.error(message)
+                else:
+                    st.warning("Vui lòng nhập đầy đủ thông tin")
+    
+    with tab_register:
+        st.subheader("Tạo tài khoản mới 🎉")
+        
+        with st.form("register_form"):
+            new_username = st.text_input("Tên đăng nhập", placeholder="Ít nhất 3 ký tự", key="reg_username")
+            new_display = st.text_input("Tên hiển thị (tùy chọn)", placeholder="Tên bạn muốn hiển thị", key="reg_display")
+            new_password = st.text_input("Mật khẩu", type="password", placeholder="Ít nhất 4 ký tự", key="reg_password")
+            new_password2 = st.text_input("Xác nhận mật khẩu", type="password", placeholder="Nhập lại mật khẩu", key="reg_password2")
+            
+            register = st.form_submit_button("Đăng Ký", use_container_width=True, type="primary")
+            
+            if register:
+                if new_password != new_password2:
+                    st.error("Mật khẩu không khớp!")
+                elif new_username and new_password:
+                    success, message = register_user(new_username, new_password, new_display)
+                    if success:
+                        st.success(message)
+                        st.info("Hãy chuyển sang tab Đăng Nhập")
+                    else:
+                        st.error(message)
+                else:
+                    st.warning("Vui lòng nhập đầy đủ thông tin")
+
+
+def show_user_info_sidebar():
+    """Hiển thị thông tin user ở sidebar."""
+    user = get_current_user()
+    if user:
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown(f"### 👋 Xin chào,\n**{user.get('display_name') or user.get('username')}**")
+            
+            # Hiển thị mode database
+            if is_using_supabase():
+                st.caption("☁️ Cloud Mode")
+            else:
+                st.caption("💾 Local Mode")
+                
+            st.markdown("---")
+            
+            if st.button("🚪 Đăng xuất", key="sidebar_logout", use_container_width=True):
+                logout()
+                st.rerun()
+
+
+==================================================
+FILE: db_wrapper.py
+==================================================
+﻿# -*- coding: utf-8 -*-
+"""
+Database Wrapper - Tá»± Ä‘á»™ng chá»n Supabase hoáº·c SQLite.
+Import module nÃ y thay vÃ¬ import trá»±c tiáº¿p database.py hoáº·c supabase_db.py
+"""
+
+import streamlit as st
+from datetime import date
+from typing import List, Dict, Optional
+
+# Thá»­ import Supabase
+try:
+    import supabase_db
+    _SUPABASE_MODULE_OK = True
+except:
+    _SUPABASE_MODULE_OK = False
+
+# Import SQLite fallback
+import database as sqlite_db
+
+
+def _check_supabase() -> bool:
+    """Kiá»ƒm tra Supabase cÃ³ sáºµn khÃ´ng (gá»i má»—i láº§n)."""
+    if not _SUPABASE_MODULE_OK:
+        return False
+    try:
+        return supabase_db.is_supabase_available()
+    except:
+        return False
+
+
+def is_cloud_mode() -> bool:
+    """Kiá»ƒm tra Ä‘ang dÃ¹ng cloud (Supabase) hay local (SQLite)."""
+    return _check_supabase()
+
+
+def _get_user_id() -> Optional[int]:
+    """Láº¥y user_id tá»« session."""
+    if "user_info" in st.session_state and st.session_state["user_info"]:
+        return st.session_state["user_info"].get("id")
+    return None
+
+
+# ==================== JOBS ====================
+
+def get_all_jobs() -> List[Dict]:
+    """Láº¥y táº¥t cáº£ cÃ´ng viá»‡c."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.get_all_jobs(user_id)
+        return []
+    return sqlite_db.get_all_jobs()
+
+
+def add_job(job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> Optional[int]:
+    """ThÃªm cÃ´ng viá»‡c má»›i."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.add_job(user_id, job_name, hourly_rate, description, color)
+        return None
+    return sqlite_db.add_job(job_name, hourly_rate, description, color)
+
+
+def update_job(job_id: int, job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> bool:
+    """Cáº­p nháº­t cÃ´ng viá»‡c."""
+    if _check_supabase():
+        return supabase_db.update_job(job_id, job_name, hourly_rate, description, color)
+    return sqlite_db.update_job(job_id, job_name, hourly_rate, description, color)
+
+
+def delete_job(job_id: int) -> bool:
+    """XÃ³a cÃ´ng viá»‡c."""
+    if _check_supabase():
+        return supabase_db.delete_job(job_id)
+    return sqlite_db.delete_job(job_id)
+
+
+def get_job_by_id(job_id: int) -> Optional[Dict]:
+    """Láº¥y thÃ´ng tin cÃ´ng viá»‡c theo ID."""
+    if _check_supabase():
+        jobs = get_all_jobs()
+        for job in jobs:
+            if job['id'] == job_id:
+                return job
+        return None
+    return sqlite_db.get_job_by_id(job_id)
+
+
+# ==================== WORK SHIFTS ====================
+
+def add_work_shift(
+    work_date: date,
+    shift_name: str,
+    start_time: str,
+    end_time: str,
+    break_hours: float,
+    total_hours: float,
+    notes: str = "",
+    job_id: int = None
+) -> int:
+    """ThÃªm ca lÃ m viá»‡c má»›i."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            result = supabase_db.add_work_shift(user_id, work_date, shift_name, start_time, end_time, break_hours, total_hours, notes, job_id)
+            return result if result else -1
+        return -1
+    return sqlite_db.add_work_shift(work_date, shift_name, start_time, end_time, break_hours, total_hours, notes, job_id)
+
+
+def update_work_shift(
+    shift_id: int,
+    shift_name: str,
+    start_time: str,
+    end_time: str,
+    break_hours: float,
+    total_hours: float,
+    notes: str = ""
+) -> bool:
+    """Cáº­p nháº­t ca lÃ m viá»‡c."""
+    if _check_supabase():
+        return supabase_db.update_work_shift(shift_id, shift_name, start_time, end_time, break_hours, total_hours, notes)
+    return sqlite_db.update_work_shift(shift_id, shift_name, start_time, end_time, break_hours, total_hours, notes)
+
+
+def delete_work_shift(shift_id: int) -> bool:
+    """XÃ³a ca lÃ m viá»‡c."""
+    if _check_supabase():
+        return supabase_db.delete_work_shift(shift_id)
+    return sqlite_db.delete_work_shift(shift_id)
+
+
+def get_shifts_by_date(work_date: date) -> List[Dict]:
+    """Láº¥y cÃ¡c ca lÃ m viá»‡c theo ngÃ y."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.get_shifts_by_date(user_id, work_date)
+        return []
+    return sqlite_db.get_shifts_by_date(work_date)
+
+
+def get_shifts_by_range(start_date: date, end_date: date) -> List[Dict]:
+    """Láº¥y cÃ¡c ca lÃ m viá»‡c trong khoáº£ng thá»i gian."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.get_shifts_by_range(user_id, start_date, end_date)
+        return []
+    return sqlite_db.get_shifts_by_range(start_date, end_date)
+
+
+def get_shift_by_id(shift_id: int) -> Optional[Dict]:
+    """Láº¥y thÃ´ng tin ca lÃ m viá»‡c theo ID."""
+    return sqlite_db.get_shift_by_id(shift_id)
+
+
+def get_daily_summary(work_date: date, standard_hours: float = 8.0) -> Dict:
+    """Láº¥y tá»•ng há»£p giá» lÃ m cá»§a má»™t ngÃ y."""
+    return sqlite_db.get_daily_summary(work_date, standard_hours)
+
+
+def get_daily_summaries_by_range(start_date: date, end_date: date, standard_hours: float = 8.0) -> List[Dict]:
+    """Láº¥y tá»•ng há»£p giá» lÃ m theo ngÃ y trong khoáº£ng thá»i gian."""
+    return sqlite_db.get_daily_summaries_by_range(start_date, end_date, standard_hours)
+
+
+def get_daily_summaries_by_month(year: int, month: int, standard_hours: float = 8.0) -> List[Dict]:
+    """Láº¥y tá»•ng há»£p giá» lÃ m theo ngÃ y trong má»™t thÃ¡ng."""
+    return sqlite_db.get_daily_summaries_by_month(year, month, standard_hours)
+
+
+# ==================== HOLIDAYS ====================
+
+def add_holiday(holiday_date: date, description: str) -> bool:
+    """ThÃªm ngÃ y nghá»‰."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.add_holiday(user_id, holiday_date, description)
+        return False
+    return sqlite_db.add_holiday(holiday_date, description)
+
+
+def remove_holiday(holiday_date: date) -> bool:
+    """XÃ³a ngÃ y nghá»‰."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.remove_holiday(user_id, holiday_date)
+        return False
+    return sqlite_db.remove_holiday(holiday_date)
+
+
+def get_all_holidays() -> List[Dict]:
+    """Láº¥y táº¥t cáº£ ngÃ y nghá»‰."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.get_all_holidays(user_id)
+        return []
+    return sqlite_db.get_all_holidays()
+
+
+def get_holidays_by_year(year: int) -> List[Dict]:
+    """Lấy danh sách ngày nghỉ trong năm."""
+    if _check_supabase():
+        # Lấy tất cả và lọc (tạm thời)
+        all_holidays = get_all_holidays()
+        return [h for h in all_holidays if str(h.get('holiday_date', '')).startswith(str(year))]
+    return sqlite_db.get_holidays_by_year(year)
+
+
+def is_holiday(check_date: date) -> tuple:
+    """Kiá»ƒm tra ngÃ y nghá»‰."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.is_holiday(user_id, check_date)
+        return False, ""
+    return sqlite_db.is_holiday(check_date)
+
+
+# ==================== SETTINGS ====================
+
+def get_setting(key: str) -> Optional[str]:
+    """Láº¥y cÃ i Ä‘áº·t."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.get_setting(user_id, key)
+        return None
+    return sqlite_db.get_setting(key)
+
+
+def update_setting(key: str, value: str) -> bool:
+    """Cáº­p nháº­t cÃ i Ä‘áº·t."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.update_setting(user_id, key, value)
+        return False
+    return sqlite_db.update_setting(key, value)
+
+
+def get_standard_hours() -> float:
+    """Láº¥y sá»‘ giá» chuáº©n."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.get_standard_hours(user_id)
+        return 8.0
+    return sqlite_db.get_standard_hours()
+
+
+def get_default_break_hours() -> float:
+    """Láº¥y giá» nghá»‰ máº·c Ä‘á»‹nh."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            return supabase_db.get_default_break_hours(user_id)
+        return 1.0
+    return sqlite_db.get_default_break_hours()
+
+
+def get_ot_rate() -> float:
+    """Láº¥y há»‡ sá»‘ OT."""
+    if _check_supabase():
+        user_id = _get_user_id()
+        if user_id:
+            value = supabase_db.get_setting(user_id, 'ot_rate')
+            return float(value) if value else 1.25
+        return 1.25
+    return sqlite_db.get_ot_rate()
+
+
+# ==================== DATABASE INIT ====================
+
+def init_database():
+    """Khá»Ÿi táº¡o database."""
+    # Supabase khÃ´ng cáº§n init (Ä‘Ã£ cÃ³ tables sáºµn)
+    if not _check_supabase():
+        sqlite_db.init_database()
+
+
+def clear_cache():
+    """XÃ³a cache."""
+    sqlite_db.clear_cache()
+
+
+# ==================== COMPATIBILITY ====================
+
+def get_work_logs_by_month(year: int, month: int) -> List[Dict]:
+    """Compatibility wrapper for get_work_logs_by_month."""
+    if _check_supabase():
+        # Map to daily summaries
+        return get_daily_summaries_by_month(year, month)
+    return sqlite_db.get_work_logs_by_month(year, month)
+
+
+def get_work_logs_by_range(start_date: date, end_date: date) -> List[Dict]:
+    """Compatibility wrapper for get_work_logs_by_range."""
+    if _check_supabase():
+        return get_daily_summaries_by_range(start_date, end_date)
+    return sqlite_db.get_work_logs_by_range(start_date, end_date)
+
+
+def delete_work_log(work_date: date) -> bool:
+    """Delete all work logs/shifts for a date."""
+    if _check_supabase():
+        # Delete all shifts for this date
+        shifts = get_shifts_by_date(work_date)
+        if not shifts:
+            return True # Nothing to delete
+            
+        success = True
+        for shift in shifts:
+            if not delete_work_shift(shift['id']):
+                success = False
+        return success
+    return sqlite_db.delete_work_log(work_date)
+
+
+==================================================
+FILE: database.py
+==================================================
+# -*- coding: utf-8 -*-
+"""
+Module quản lý cơ sở dữ liệu SQLite cho ứng dụng Quản Lý Giờ Làm.
+Lưu trữ giờ làm (hỗ trợ nhiều ca/ngày), ngày nghỉ, và cài đặt người dùng.
+"""
+
+import sqlite3
+from datetime import datetime, date
+from typing import List, Dict, Optional, Tuple
+import os
+import sys
+
+# Thiết lập UTF-8 encoding cho Windows
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+try:
+    if sys.stdout and sys.stdout.encoding != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
+    if sys.stderr and sys.stderr.encoding != 'utf-8':
+        sys.stderr.reconfigure(encoding='utf-8')
+except:
+    pass
+
+# Đường dẫn database mặc định (sẽ được ghi đè bởi user-specific path)
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "work_hours.db")
+
+def get_db_path() -> str:
+    """Lấy đường dẫn database. Ưu tiên database của user nếu đã đăng nhập."""
+    try:
+        import streamlit as st
+        if "user_db_path" in st.session_state and st.session_state["user_db_path"]:
+            return st.session_state["user_db_path"]
+    except:
+        pass
+    return DEFAULT_DB_PATH
+
+# Alias cho tương thích
+DB_PATH = DEFAULT_DB_PATH
+
+# Cache đơn giản để tối ưu đọc database
+_cache = {}
+_cache_timeout = 5  # giây
+
+
+def _get_cache(key):
+    """Lấy dữ liệu từ cache nếu còn hiệu lực."""
+    if key in _cache:
+        data, timestamp = _cache[key]
+        if (datetime.now() - timestamp).seconds < _cache_timeout:
+            return data
+    return None
+
+
+def _set_cache(key, data):
+    """Lưu dữ liệu vào cache."""
+    _cache[key] = (data, datetime.now())
+
+
+def clear_cache():
+    """Xóa toàn bộ cache."""
+    global _cache
+    _cache = {}
+
+
+def get_connection() -> sqlite3.Connection:
+    """Tạo kết nối đến database."""
+    db_path = get_db_path()
+    # Đảm bảo thư mục tồn tại
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row  # Cho phép truy cập cột theo tên
+    return conn
+
+
+def init_database() -> None:
+    """Khởi tạo database và tạo các bảng nếu chưa tồn tại."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Bảng lưu giờ làm hàng ngày (giữ lại để tương thích ngược)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS work_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_date DATE NOT NULL UNIQUE,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            break_hours REAL DEFAULT 1.0,
+            total_hours REAL NOT NULL,
+            overtime_hours REAL DEFAULT 0.0,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Bảng lưu công việc và lương giờ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_name TEXT NOT NULL UNIQUE,
+            hourly_rate REAL NOT NULL DEFAULT 0.0,
+            description TEXT,
+            color TEXT DEFAULT '#667eea',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Bảng mới: Lưu các ca làm việc (hỗ trợ nhiều ca/ngày)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS work_shifts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            work_date DATE NOT NULL,
+            shift_name TEXT DEFAULT 'Ca 1',
+            job_id INTEGER,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            break_hours REAL DEFAULT 0.0,
+            total_hours REAL NOT NULL,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (job_id) REFERENCES jobs(id)
+        )
+    """)
+    
+    # Kiểm tra và thêm cột job_id nếu chưa có (migration)
+    cursor.execute("PRAGMA table_info(work_shifts)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'job_id' not in columns:
+        cursor.execute("ALTER TABLE work_shifts ADD COLUMN job_id INTEGER")
+    
+    # Bảng lưu ngày nghỉ lễ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS holidays (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            holiday_date DATE NOT NULL UNIQUE,
+            description TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Bảng lưu cài đặt
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Thêm cài đặt mặc định nếu chưa có
+    default_settings = [
+        ("standard_hours", "8.0"),
+        ("break_hours", "1.0"),
+        ("ot_rate", "1.5"),  # Hệ số lương OT
+    ]
+    
+    for key, value in default_settings:
+        cursor.execute("""
+            INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)
+        """, (key, value))
+    
+    # Thêm công việc mặc định nếu chưa có
+    cursor.execute("SELECT COUNT(*) FROM jobs")
+    if cursor.fetchone()[0] == 0:
+        default_jobs = [
+            ('Bệnh viện', 1200, 'Làm việc tại bệnh viện', '#EF4444'),
+            ('Kombini', 1100, 'Làm việc tại cửa hàng tiện lợi', '#3B82F6'),
+            ('Công việc khác', 1000, 'Các công việc khác', '#6B7280')
+        ]
+        
+        for name, rate, desc, color in default_jobs:
+            cursor.execute("""
+                INSERT INTO jobs (job_name, hourly_rate, description, color) 
+                VALUES (?, ?, ?, ?)
+            """, (name, rate, desc, color))
+    
+    conn.commit()
+    conn.close()
+
+
+# Cờ để kiểm soát việc sync (tránh sync quá nhiều)
+ENABLE_SYNC = True
+
+def _sync_to_github():
+    """Đồng bộ database của user hiện tại lên GitHub (chạy background nếu có thể)."""
+    if not ENABLE_SYNC:
+        return
+        
+    try:
+        import streamlit as st
+        import github_sync
+        
+        if "user_info" in st.session_state and st.session_state["user_info"]:
+            username = st.session_state["user_info"]["username"]
+            # Chạy sync
+            github_sync.sync_push_user_db(username)
+    except Exception as e:
+        print(f"Sync error: {e}")
+
+# ==================== JOBS (Công việc và lương giờ) ====================
+
+def add_job(job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> int:
+    """Thêm công việc mới. Nếu đã tồn tại, trả về ID của job đó."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Kiểm tra xem job đã tồn tại chưa
+        cursor.execute("SELECT id FROM jobs WHERE job_name = ?", (job_name,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Nếu đã tồn tại, cập nhật lương và trả về ID
+            cursor.execute("""
+                UPDATE jobs SET hourly_rate = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE job_name = ?
+            """, (hourly_rate, description, job_name))
+            conn.commit()
+            conn.close()
+            clear_cache()
+            _sync_to_github()  # Sync
+            return existing[0]
+        
+        # Thêm mới nếu chưa tồn tại
+        cursor.execute("""
+            INSERT INTO jobs (job_name, hourly_rate, description, color)
+            VALUES (?, ?, ?, ?)
+        """, (job_name, hourly_rate, description, color))
+        
+        job_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        clear_cache()
+        _sync_to_github()  # Sync
+        return job_id
+    except Exception:
+        return -1
+
+
+def update_job(job_id: int, job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> bool:
+    """Cập nhật thông tin công việc."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE jobs SET
+                job_name = ?,
+                hourly_rate = ?,
+                description = ?,
+                color = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (job_name, hourly_rate, description, color, job_id))
+        
+        conn.commit()
+        conn.close()
+        clear_cache()  # Xóa cache khi cập nhật
+        _sync_to_github()  # Sync
+        return True
+    except Exception:
+        return False
+
+
+def delete_job(job_id: int) -> bool:
+    """Xóa công việc."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        
+        conn.commit()
+        conn.close()
+        clear_cache()  # Xóa cache khi xóa
+        _sync_to_github()  # Sync
+        return True
+    except Exception:
+        return False
+
+
+def get_all_jobs() -> List[Dict]:
+    """Lấy tất cả công việc (có cache)."""
+    cached = _get_cache('all_jobs')
+    if cached is not None:
+        return cached
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM jobs ORDER BY job_name ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    result = [dict(row) for row in rows]
+    _set_cache('all_jobs', result)
+    return result
+
+
+def get_job_by_id(job_id: int) -> Optional[Dict]:
+    """Lấy thông tin một công việc."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return dict(row)
+    return None
+
+
+def get_ot_rate() -> float:
+    """Lấy hệ số lương OT."""
+    value = get_setting("ot_rate")
+    return float(value) if value else 1.5
+
+
+def calculate_salary_by_month(year: int, month: int) -> Dict:
+    """
+    Tính lương theo tháng, phân chia theo từng công việc.
+    
+    Returns:
+        Dict với thông tin lương theo từng công việc và tổng lương
+    """
+    from datetime import timedelta
+    
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = date(year, month + 1, 1) - timedelta(days=1)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Lấy tất cả ca làm việc trong tháng với thông tin công việc
+    cursor.execute("""
+        SELECT 
+            ws.*, 
+            j.job_name, 
+            j.hourly_rate,
+            j.color
+        FROM work_shifts ws
+        LEFT JOIN jobs j ON ws.job_id = j.id
+        WHERE ws.work_date BETWEEN ? AND ?
+        ORDER BY ws.work_date ASC
+    """, (start_date.isoformat(), end_date.isoformat()))
+    
+    shifts = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    # Lấy cài đặt
+    standard_hours = get_standard_hours()
+    ot_rate = get_ot_rate()
+    
+    # Tính theo từng công việc
+    job_salary = {}
+    total_hours_all = 0
+    total_salary_all = 0
+    
+    for shift in shifts:
+        job_id = shift.get('job_id') or 0
+        job_name = shift.get('job_name') or 'Chưa phân loại'
+        hourly_rate = shift.get('hourly_rate') or 0
+        color = shift.get('color') or '#667eea'
+        hours = shift['total_hours']
+        
+        if job_id not in job_salary:
+            job_salary[job_id] = {
+                'job_id': job_id,
+                'job_name': job_name,
+                'hourly_rate': hourly_rate,
+                'color': color,
+                'total_hours': 0,
+                'shift_count': 0,
+                'base_salary': 0
+            }
+        
+        job_salary[job_id]['total_hours'] += hours
+        job_salary[job_id]['shift_count'] += 1
+        job_salary[job_id]['base_salary'] += hours * hourly_rate
+        total_hours_all += hours
+    
+    # Tính OT (tính theo tổng giờ ngày, không theo từng ca)
+    # Lấy tổng giờ theo ngày
+    daily_hours = {}
+    for shift in shifts:
+        day = shift['work_date']
+        if day not in daily_hours:
+            daily_hours[day] = 0
+        daily_hours[day] += shift['total_hours']
+    
+    total_ot_hours = 0
+    for day, hours in daily_hours.items():
+        if hours > standard_hours:
+            total_ot_hours += hours - standard_hours
+    
+    # Tính tổng lương
+    for job_id, data in job_salary.items():
+        total_salary_all += data['base_salary']
+    
+    # Thêm tiền OT (tính dựa trên lương trung bình các công việc)
+    if total_hours_all > 0 and total_salary_all > 0:
+        avg_hourly_rate = total_salary_all / total_hours_all
+        ot_bonus = total_ot_hours * avg_hourly_rate * (ot_rate - 1)  # Phần thưởng OT
+    else:
+        avg_hourly_rate = 0
+        ot_bonus = 0
+    
+    return {
+        'year': year,
+        'month': month,
+        'jobs': list(job_salary.values()),
+        'total_hours': round(total_hours_all, 2),
+        'total_ot_hours': round(total_ot_hours, 2),
+        'total_days': len(daily_hours),
+        'base_salary': round(total_salary_all, 0),
+        'ot_bonus': round(ot_bonus, 0),
+        'total_salary': round(total_salary_all + ot_bonus, 0),
+        'ot_rate': ot_rate
+    }
+
+
+# ==================== WORK SHIFTS (Nhiều ca/ngày) ====================
+
+def add_work_shift(
+    work_date: date,
+    shift_name: str,
+    start_time: str,
+    end_time: str,
+    break_hours: float,
+    total_hours: float,
+    notes: str = "",
+    job_id: int = None
+) -> int:
+    """
+    Thêm một ca làm việc mới.
+    
+    Args:
+        work_date: Ngày làm việc
+        shift_name: Tên ca (ví dụ: "Ca sáng", "Ca tối")
+        start_time: Giờ bắt đầu (HH:MM)
+        end_time: Giờ kết thúc (HH:MM)
+        break_hours: Số giờ nghỉ
+        total_hours: Tổng giờ làm ca này
+        notes: Ghi chú (tùy chọn)
+        job_id: ID công việc (tùy chọn)
+    
+    Returns:
+        ID của ca làm việc mới, -1 nếu lỗi
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO work_shifts 
+                (work_date, shift_name, job_id, start_time, end_time, break_hours, total_hours, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (work_date.isoformat(), shift_name, job_id, start_time, end_time, 
+              break_hours, total_hours, notes))
+        
+        shift_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        _sync_to_github()  # Sync
+        return shift_id
+    except Exception as e:
+        print(f"Lỗi khi thêm ca làm việc: {e}")
+        return -1
+
+
+def update_work_shift(
+    shift_id: int,
+    shift_name: str,
+    start_time: str,
+    end_time: str,
+    break_hours: float,
+    total_hours: float,
+    notes: str = ""
+) -> bool:
+    """Cập nhật một ca làm việc."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE work_shifts SET
+                shift_name = ?,
+                start_time = ?,
+                end_time = ?,
+                break_hours = ?,
+                total_hours = ?,
+                notes = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (shift_name, start_time, end_time, break_hours, total_hours, notes, shift_id))
+        
+        conn.commit()
+        conn.close()
+        _sync_to_github()  # Sync
+        return True
+    except Exception as e:
+        print(f"Lỗi khi cập nhật ca làm việc: {e}")
+        return False
+
+
+def delete_work_shift(shift_id: int) -> bool:
+    """Xóa một ca làm việc theo ID."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM work_shifts WHERE id = ?", (shift_id,))
+        
+        conn.commit()
+        conn.close()
+        _sync_to_github()  # Sync
+        return True
+    except Exception as e:
+        print(f"Lỗi khi xóa ca làm việc: {e}")
+        return False
+
+
+def get_shifts_by_date(work_date: date) -> List[Dict]:
+    """Lấy tất cả ca làm việc của một ngày."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT * FROM work_shifts 
+        WHERE work_date = ?
+        ORDER BY start_time ASC
+    """, (work_date.isoformat(),))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+
+def get_shift_by_id(shift_id: int) -> Optional[Dict]:
+    """Lấy thông tin một ca làm việc theo ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM work_shifts WHERE id = ?", (shift_id,))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return dict(row)
+    return None
+
+
+def get_daily_summary(work_date: date, standard_hours: float = 8.0) -> Dict:
+    """
+    Lấy tổng hợp giờ làm của một ngày (tất cả các ca).
+    
+    Returns:
+        Dict với total_hours, overtime_hours, shift_count, shifts
+    """
+    shifts = get_shifts_by_date(work_date)
+    
+    if not shifts:
+        return {
+            "work_date": work_date.isoformat(),
+            "total_hours": 0.0,
+            "overtime_hours": 0.0,
+            "shift_count": 0,
+            "shifts": []
+        }
+    
+    total_hours = sum(s['total_hours'] for s in shifts)
+    overtime_hours = max(0, total_hours - standard_hours)
+    
+    return {
+        "work_date": work_date.isoformat(),
+        "total_hours": round(total_hours, 2),
+        "overtime_hours": round(overtime_hours, 2),
+        "shift_count": len(shifts),
+        "shifts": shifts
+    }
+
+
+def get_shifts_by_range(start_date: date, end_date: date) -> List[Dict]:
+    """Lấy tất cả ca làm việc trong khoảng thời gian."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT * FROM work_shifts 
+        WHERE work_date BETWEEN ? AND ?
+        ORDER BY work_date ASC, start_time ASC
+    """, (start_date.isoformat(), end_date.isoformat()))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+
+def get_daily_summaries_by_range(start_date: date, end_date: date, standard_hours: float = 8.0) -> List[Dict]:
+    """
+    Lấy tổng hợp giờ làm theo ngày trong khoảng thời gian.
+    Gộp các ca trong cùng một ngày.
+    """
+    shifts = get_shifts_by_range(start_date, end_date)
+    
+    # Gộp theo ngày
+    daily_data = {}
+    for shift in shifts:
+        work_date = shift['work_date']
+        if work_date not in daily_data:
+            daily_data[work_date] = {
+                "work_date": work_date,
+                "total_hours": 0.0,
+                "shift_count": 0,
+                "shifts": [],
+                "start_time": shift['start_time'],  # Ca đầu tiên
+                "end_time": shift['end_time'],
+                "break_hours": 0.0,
+                "notes": ""
+            }
+        
+        daily_data[work_date]["total_hours"] += shift['total_hours']
+        daily_data[work_date]["break_hours"] += shift['break_hours']
+        daily_data[work_date]["shift_count"] += 1
+        daily_data[work_date]["shifts"].append(shift)
+        daily_data[work_date]["end_time"] = shift['end_time']  # Ca cuối cùng
+        
+        # Gộp notes
+        if shift['notes']:
+            if daily_data[work_date]["notes"]:
+                daily_data[work_date]["notes"] += f"; {shift['notes']}"
+            else:
+                daily_data[work_date]["notes"] = shift['notes']
+    
+    # Tính overtime cho mỗi ngày
+    result = []
+    for work_date, data in daily_data.items():
+        data["total_hours"] = round(data["total_hours"], 2)
+        data["overtime_hours"] = round(max(0, data["total_hours"] - standard_hours), 2)
+        result.append(data)
+    
+    # Sắp xếp theo ngày
+    result.sort(key=lambda x: x["work_date"])
+    return result
+
+
+def get_daily_summaries_by_month(year: int, month: int, standard_hours: float = 8.0) -> List[Dict]:
+    """Lấy tổng hợp giờ làm theo ngày trong một tháng."""
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1)
+    else:
+        end_date = date(year, month + 1, 1)
+    
+    from datetime import timedelta
+    end_date = end_date - timedelta(days=1)
+    
+    return get_daily_summaries_by_range(start_date, end_date, standard_hours)
+
+
+# ==================== WORK LOGS (Tương thích ngược) ====================
+
+def save_work_log(
+    work_date: date,
+    start_time: str,
+    end_time: str,
+    break_hours: float,
+    total_hours: float,
+    overtime_hours: float,
+    notes: str = ""
+) -> bool:
+    """
+    Lưu hoặc cập nhật giờ làm cho một ngày (tương thích ngược).
+    Phương thức này sẽ tạo/cập nhật cả work_logs và work_shifts.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Lưu vào work_logs (tương thích ngược)
+        cursor.execute("""
+            INSERT INTO work_logs 
+                (work_date, start_time, end_time, break_hours, total_hours, overtime_hours, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(work_date) DO UPDATE SET
+                start_time = excluded.start_time,
+                end_time = excluded.end_time,
+                break_hours = excluded.break_hours,
+                total_hours = excluded.total_hours,
+                overtime_hours = excluded.overtime_hours,
+                notes = excluded.notes,
+                updated_at = CURRENT_TIMESTAMP
+        """, (work_date.isoformat(), start_time, end_time, break_hours, 
+              total_hours, overtime_hours, notes))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Lỗi khi lưu giờ làm: {e}")
+        return False
+
+
+def get_work_log(work_date: date) -> Optional[Dict]:
+    """Lấy giờ làm của một ngày cụ thể (ưu tiên từ work_shifts nếu có)."""
+    # Kiểm tra work_shifts trước
+    shifts = get_shifts_by_date(work_date)
+    if shifts:
+        standard_hours = get_standard_hours()
+        summary = get_daily_summary(work_date, standard_hours)
+        return {
+            "work_date": work_date.isoformat(),
+            "start_time": shifts[0]['start_time'],
+            "end_time": shifts[-1]['end_time'],
+            "break_hours": sum(s['break_hours'] for s in shifts),
+            "total_hours": summary['total_hours'],
+            "overtime_hours": summary['overtime_hours'],
+            "notes": "; ".join(s['notes'] for s in shifts if s['notes']),
+            "shift_count": len(shifts),
+            "shifts": shifts
+        }
+    
+    # Fallback: Lấy từ work_logs
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT * FROM work_logs WHERE work_date = ?
+    """, (work_date.isoformat(),))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        result = dict(row)
+        result['shift_count'] = 1
+        result['shifts'] = []
+        return result
+    return None
+
+
+def get_work_logs_by_range(start_date: date, end_date: date) -> List[Dict]:
+    """Lấy danh sách giờ làm trong khoảng thời gian (kết hợp cả 2 bảng)."""
+    standard_hours = get_standard_hours()
+    
+    # Lấy từ work_shifts (ưu tiên)
+    daily_summaries = get_daily_summaries_by_range(start_date, end_date, standard_hours)
+    shift_dates = {s['work_date'] for s in daily_summaries}
+    
+    # Lấy từ work_logs cho các ngày chưa có trong shifts
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT * FROM work_logs 
+        WHERE work_date BETWEEN ? AND ?
+        ORDER BY work_date ASC
+    """, (start_date.isoformat(), end_date.isoformat()))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Thêm các ngày từ work_logs chưa có trong shifts
+    for row in rows:
+        if row['work_date'] not in shift_dates:
+            log_dict = dict(row)
+            log_dict['shift_count'] = 1
+            daily_summaries.append(log_dict)
+    
+    # Sắp xếp lại
+    daily_summaries.sort(key=lambda x: x['work_date'])
+    return daily_summaries
+
+
+def get_work_logs_by_month(year: int, month: int) -> List[Dict]:
+    """Lấy danh sách giờ làm trong một tháng."""
+    start_date = date(year, month, 1)
+    if month == 12:
+        end_date = date(year + 1, 1, 1)
+    else:
+        end_date = date(year, month + 1, 1)
+    
+    from datetime import timedelta
+    end_date = end_date - timedelta(days=1)
+    
+    return get_work_logs_by_range(start_date, end_date)
+
+
+def delete_work_log(work_date: date) -> bool:
+    """Xóa giờ làm của một ngày (cả work_logs và work_shifts)."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Xóa từ work_logs
+        cursor.execute("DELETE FROM work_logs WHERE work_date = ?", 
+                      (work_date.isoformat(),))
+        
+        # Xóa từ work_shifts
+        cursor.execute("DELETE FROM work_shifts WHERE work_date = ?", 
+                      (work_date.isoformat(),))
+        
+        conn.commit()
+        conn.close()
+        _sync_to_github()  # Sync
+        return True
+    except Exception as e:
+        print(f"Lỗi khi xóa giờ làm: {e}")
+        return False
+
+
+# ==================== HOLIDAYS ====================
+
+def add_holiday(holiday_date: date, description: str) -> bool:
+    """Thêm ngày nghỉ lễ."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO holidays (holiday_date, description)
+            VALUES (?, ?)
+        """, (holiday_date.isoformat(), description))
+        
+        conn.commit()
+        conn.close()
+        _sync_to_github()  # Sync
+        return True
+    except Exception as e:
+        print(f"Lỗi khi thêm ngày nghỉ: {e}")
+        return False
+
+
+def remove_holiday(holiday_date: date) -> bool:
+    """Xóa ngày nghỉ lễ."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM holidays WHERE holiday_date = ?", 
+                      (holiday_date.isoformat(),))
+        
+        conn.commit()
+        conn.close()
+        _sync_to_github()  # Sync
+        return True
+    except Exception as e:
+        print(f"Lỗi khi xóa ngày nghỉ: {e}")
+        return False
+
+
+def get_all_holidays() -> List[Dict]:
+    """Lấy tất cả ngày nghỉ lễ."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM holidays ORDER BY holiday_date ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+
+def get_holidays_by_year(year: int) -> List[Dict]:
+    """Lấy ngày nghỉ lễ trong một năm."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT * FROM holidays 
+        WHERE strftime('%Y', holiday_date) = ?
+        ORDER BY holiday_date ASC
+    """, (str(year),))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+
+def is_holiday(check_date: date) -> Tuple[bool, str]:
+    """Kiểm tra xem một ngày có phải ngày nghỉ không."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT description FROM holidays WHERE holiday_date = ?
+    """, (check_date.isoformat(),))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return True, row['description']
+    return False, ""
+
+
+# ==================== SETTINGS ====================
+
+def get_setting(key: str) -> Optional[str]:
+    """Lấy giá trị một cài đặt."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return row['value']
+    return None
+
+
+def get_all_settings() -> Dict[str, str]:
+    """Lấy tất cả cài đặt."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT key, value FROM settings")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return {row['key']: row['value'] for row in rows}
+
+
+def update_setting(key: str, value: str) -> bool:
+    """Cập nhật một cài đặt."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET 
+                value = excluded.value,
+                updated_at = CURRENT_TIMESTAMP
+        """, (key, value))
+        
+        conn.commit()
+        conn.close()
+        _sync_to_github()  # Sync
+        return True
+    except Exception as e:
+        print(f"Lỗi khi cập nhật cài đặt: {e}")
+        return False
+
+
+def get_standard_hours() -> float:
+    """Lấy số giờ làm chuẩn."""
+    value = get_setting("standard_hours")
+    return float(value) if value else 8.0
+
+
+def get_default_break_hours() -> float:
+    """Lấy số giờ nghỉ mặc định."""
+    value = get_setting("break_hours")
+    return float(value) if value else 1.0
+
+
+# Note: Database khởi tạo được gọi trong app.py sau khi user đăng nhập
+# để đảm bảo sử dụng đúng database path của user
+
+
+==================================================
+FILE: calculations.py
+==================================================
+# -*- coding: utf-8 -*-
+"""
+Module tính toán giờ làm việc và giờ làm thêm.
+Bao gồm các hàm validate và xử lý thời gian.
+"""
+
+from datetime import datetime, time, date, timedelta
+from typing import Tuple, Optional, Dict, List
+import pandas as pd
+
+
+def parse_time(time_str: str) -> Optional[time]:
+    """
+    Chuyển đổi chuỗi thời gian thành đối tượng time.
+    
+    Args:
+        time_str: Chuỗi thời gian định dạng "HH:MM"
+    
+    Returns:
+        Đối tượng time hoặc None nếu không hợp lệ
+    """
+    try:
+        return datetime.strptime(time_str, "%H:%M").time()
+    except ValueError:
+        return None
+
+
+def time_to_hours(t: time) -> float:
+    """Chuyển đổi time thành số giờ (float)."""
+    return t.hour + t.minute / 60.0
+
+
+def validate_time_input(start_time: str, end_time: str, allow_overnight: bool = True) -> Tuple[bool, str]:
+    """
+    Kiểm tra đầu vào thời gian có hợp lệ không.
+    
+    Args:
+        start_time: Giờ bắt đầu (HH:MM)
+        end_time: Giờ kết thúc (HH:MM)
+        allow_overnight: Cho phép ca qua đêm (giờ kết thúc < giờ bắt đầu)
+    
+    Returns:
+        Tuple (is_valid, error_message)
+    """
+    start = parse_time(start_time)
+    end = parse_time(end_time)
+    
+    if start is None:
+        return False, "❌ Giờ bắt đầu không hợp lệ. Vui lòng nhập theo định dạng HH:MM (ví dụ: 08:00)"
+    
+    if end is None:
+        return False, "❌ Giờ kết thúc không hợp lệ. Vui lòng nhập theo định dạng HH:MM (ví dụ: 17:00)"
+    
+    # Nếu không cho phép ca qua đêm, kiểm tra thông thường
+    if not allow_overnight and start >= end:
+        return False, "❌ Giờ bắt đầu phải sớm hơn giờ kết thúc!"
+    
+    # Nếu cho phép ca qua đêm và start == end, báo lỗi
+    if start == end:
+        return False, "❌ Giờ bắt đầu và giờ kết thúc không thể giống nhau!"
+    
+    return True, ""
+
+
+def calculate_work_hours(
+    start_time: str, 
+    end_time: str, 
+    break_hours: float = 1.0
+) -> Tuple[float, str]:
+    """
+    Tính tổng số giờ làm việc.
+    Hỗ trợ ca qua đêm (ví dụ: 17:00 - 00:00 hoặc 22:00 - 06:00).
+    
+    Args:
+        start_time: Giờ bắt đầu (HH:MM)
+        end_time: Giờ kết thúc (HH:MM)
+        break_hours: Số giờ nghỉ (mặc định 1 giờ)
+    
+    Returns:
+        Tuple (total_hours, error_message)
+        total_hours = -1 nếu có lỗi
+    """
+    is_valid, error_msg = validate_time_input(start_time, end_time)
+    if not is_valid:
+        return -1, error_msg
+    
+    start = parse_time(start_time)
+    end = parse_time(end_time)
+    
+    # Tính tổng giờ làm
+    start_hours = time_to_hours(start)
+    end_hours = time_to_hours(end)
+    
+    # Xử lý ca qua đêm (end_hours < start_hours)
+    if end_hours <= start_hours:
+        # Ví dụ: 17:00 - 00:00 => 17 - 24 = 7 giờ
+        # Ví dụ: 22:00 - 06:00 => 22 - 30 = 8 giờ
+        end_hours += 24
+    
+    total_hours = end_hours - start_hours - break_hours
+    
+    if total_hours < 0:
+        return -1, "❌ Tổng giờ làm không thể âm. Vui lòng kiểm tra lại giờ nghỉ!"
+    
+    return round(total_hours, 2), ""
+
+
+def calculate_overtime(
+    total_hours: float, 
+    standard_hours: float = 8.0
+) -> float:
+    """
+    Tính giờ làm thêm.
+    
+    Args:
+        total_hours: Tổng giờ làm thực tế
+        standard_hours: Giờ làm chuẩn (mặc định 8 giờ)
+    
+    Returns:
+        Số giờ làm thêm (0 nếu không có OT)
+    """
+    overtime = total_hours - standard_hours
+    return round(max(0, overtime), 2)
+
+
+def calculate_full(
+    start_time: str,
+    end_time: str,
+    break_hours: float = 1.0,
+    standard_hours: float = 8.0
+) -> Dict:
+    """
+    Tính toán đầy đủ giờ làm và giờ làm thêm.
+    
+    Returns:
+        Dict với các key: success, total_hours, overtime_hours, error_message
+    """
+    result = {
+        "success": False,
+        "total_hours": 0.0,
+        "overtime_hours": 0.0,
+        "error_message": ""
+    }
+    
+    total_hours, error = calculate_work_hours(start_time, end_time, break_hours)
+    
+    if total_hours < 0:
+        result["error_message"] = error
+        return result
+    
+    overtime = calculate_overtime(total_hours, standard_hours)
+    
+    result["success"] = True
+    result["total_hours"] = total_hours
+    result["overtime_hours"] = overtime
+    
+    return result
+
+
+def format_hours(hours: float) -> str:
+    """
+    Format số giờ thành chuỗi dễ đọc.
+    
+    Args:
+        hours: Số giờ (float)
+    
+    Returns:
+        Chuỗi định dạng "X giờ Y phút"
+    """
+    h = int(hours)
+    m = int((hours - h) * 60)
+    
+    if m == 0:
+        return f"{h} giờ"
+    return f"{h} giờ {m} phút"
+
+
+def generate_report(work_logs: List[Dict], standard_hours: float = 8.0) -> Dict:
+    """
+    Tạo báo cáo từ danh sách giờ làm.
+    
+    Args:
+        work_logs: Danh sách dict chứa thông tin giờ làm
+        standard_hours: Giờ làm chuẩn
+    
+    Returns:
+        Dict chứa thống kê báo cáo
+    """
+    if not work_logs:
+        return {
+            "total_days": 0,
+            "total_hours": 0.0,
+            "total_overtime": 0.0,
+            "average_hours": 0.0,
+            "days_with_overtime": 0,
+            "max_overtime_day": None,
+            "max_overtime_hours": 0.0
+        }
+    
+    df = pd.DataFrame(work_logs)
+    
+    total_days = len(df)
+    total_hours = df['total_hours'].sum()
+    total_overtime = df['overtime_hours'].sum()
+    average_hours = total_hours / total_days if total_days > 0 else 0
+    days_with_overtime = len(df[df['overtime_hours'] > 0])
+    
+    # Ngày có OT nhiều nhất
+    max_idx = df['overtime_hours'].idxmax()
+    max_overtime_day = df.loc[max_idx, 'work_date'] if df.loc[max_idx, 'overtime_hours'] > 0 else None
+    max_overtime_hours = df['overtime_hours'].max()
+    
+    return {
+        "total_days": total_days,
+        "total_hours": round(total_hours, 2),
+        "total_overtime": round(total_overtime, 2),
+        "average_hours": round(average_hours, 2),
+        "days_with_overtime": days_with_overtime,
+        "max_overtime_day": max_overtime_day,
+        "max_overtime_hours": round(max_overtime_hours, 2)
+    }
+
+
+def get_week_dates(target_date: date) -> Tuple[date, date]:
+    """
+    Lấy ngày đầu tuần và cuối tuần của một ngày.
+    
+    Returns:
+        Tuple (monday, sunday)
+    """
+    monday = target_date - timedelta(days=target_date.weekday())
+    sunday = monday + timedelta(days=6)
+    return monday, sunday
+
+
+def get_month_dates(year: int, month: int) -> Tuple[date, date]:
+    """
+    Lấy ngày đầu tháng và cuối tháng.
+    
+    Returns:
+        Tuple (first_day, last_day)
+    """
+    first_day = date(year, month, 1)
+    
+    if month == 12:
+        next_month = date(year + 1, 1, 1)
+    else:
+        next_month = date(year, month + 1, 1)
+    
+    last_day = next_month - timedelta(days=1)
+    
+    return first_day, last_day
+
+
+==================================================
+FILE: requirements.txt
+==================================================
+﻿streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.18.0
+openpyxl>=3.1.0
+supabase>=2.0.0
+extra-streamlit-components>=0.1.0
 
