@@ -284,9 +284,12 @@ def get_ot_rate() -> float:
 
 def init_database():
     """Khởi tạo database."""
-    # Supabase không cần init (đã có tables sẵn)
-    if not _check_supabase():
+    # Luôn init SQLite để đảm bảo tất cả tables tồn tại
+    # (quan trọng cho các trường hợp fallback và direct queries)
+    try:
         sqlite_db.init_database()
+    except Exception as e:
+        print(f"SQLite init warning: {e}")
 
 
 def clear_cache():
