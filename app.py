@@ -1466,7 +1466,7 @@ with tab3:
 # ==================== TAB 4: TÙY CHỈNH ====================
 
 with tab4:
-    st.header("🎀 Cài Đặt Cài Đặt")
+    st.header("⚙️ Cài Đặt")
     
     # Cài đặt giờ làm
     st.subheader("🌟 Cài Đặt Giờ Làm")
@@ -1484,11 +1484,13 @@ with tab4:
             help="Số giờ làm việc tiêu chuẩn mỗi ngày. Giờ làm vượt quá sẽ tính là giờ làm thêm."
         )
         
-        if st.button("💖 Lưu Giờ Chuẩn", key="save_standard"):
-            if db.update_setting("standard_hours", str(new_standard)):
-                st.success(f"💫 Đã cập nhật giờ làm chuẩn: {new_standard} giờ")
-            else:
-                st.error("😿 Lỗi khi lưu!")
+        if st.button("💖 LƯU GIờ CHUẨN", key="save_standard"):
+            with st.spinner("Đang lưu..."):
+                time.sleep(0.3)
+                if db.update_setting("standard_hours", str(new_standard)):
+                    st.success(f"💫 Đã cập nhật giờ làm chuẩn: {new_standard} giờ")
+                else:
+                    st.error("😿 Lỗi khi lưu!")
     
     with col2:
         current_break = db.get_default_break_hours()
@@ -1501,11 +1503,13 @@ with tab4:
             help="Thời gian nghỉ trưa và nghỉ giải lao mặc định."
         )
         
-        if st.button("💖 Lưu Giờ Nghỉ", key="save_break"):
-            if db.update_setting("break_hours", str(new_break)):
-                st.success(f"💫 Đã cập nhật giờ nghỉ mặc định: {new_break} giờ")
-            else:
-                st.error("😿 Lỗi khi lưu!")
+        if st.button("💖 LƯU GIờ NGHỈ", key="save_break"):
+            with st.spinner("Đang lưu..."):
+                time.sleep(0.3)
+                if db.update_setting("break_hours", str(new_break)):
+                    st.success(f"💫 Đã cập nhật giờ nghỉ mặc định: {new_break} giờ")
+                else:
+                    st.error("😿 Lỗi khi lưu!")
     
     st.markdown("---")
     
@@ -1539,17 +1543,24 @@ with tab4:
             key="settings_job_desc"
         )
         
-        if st.button("🌺 Thêm Công Việc", type="primary", key="settings_add_job"):
-            if settings_job_name:
-                job_id = db.add_job(settings_job_name, settings_hourly_rate, settings_job_desc)
-                if job_id > 0:
-                    st.success(f"Da them cong viec: {settings_job_name}")
-                    st.cache_data.clear()
-                    st.rerun()
+        if st.button("🌺 THÊM CÔNG VIỆC", type="primary", key="settings_add_job"):
+            if settings_job_name and settings_job_name.strip():
+                if len(settings_job_name) > 50:
+                    st.error("❌ Tên công việc không được quá 50 ký tự")
+                elif settings_hourly_rate <= 0:
+                    st.error("❌ Lương giờ phải lớn hơn 0")
                 else:
-                    st.error("Loi khi them!")
+                    with st.spinner("Đang thêm công việc..."):
+                        time.sleep(0.3)
+                        job_id = db.add_job(settings_job_name.strip(), settings_hourly_rate, settings_job_desc)
+                        if job_id > 0:
+                            st.success(f"✅ Đã thêm công việc: {settings_job_name}")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error("❌ Lỗi khi thêm công việc!")
             else:
-                st.warning("Vui long nhap ten cong viec!")
+                st.warning("⚠️ Vui lòng nhập tên công việc!")
     
     with col_job2:
         st.markdown("**📋 Danh Sách Công Việc**")
@@ -1668,13 +1679,15 @@ with tab4:
             placeholder="Ví dụ: Tết Nguyên Đán, 30/4, ..."
         )
         
-        if st.button("➕ Thêm Ngày Nghỉ", type="primary"):
+        if st.button("➕ THÊM NGÀY NGHỈ", type="primary", key="add_holiday_btn"):
             if new_holiday_desc.strip():
-                if db.add_holiday(new_holiday_date, new_holiday_desc.strip()):
-                    st.success(f"🎉 Đã thêm ngày nghỉ: {new_holiday_date.strftime('%d/%m/%Y')} - {new_holiday_desc}")
-                    st.rerun()
-                else:
-                    st.error("😿 Lỗi khi thêm ngày nghỉ!")
+                with st.spinner("Đang thêm ngày nghỉ..."):
+                    time.sleep(0.3)
+                    if db.add_holiday(new_holiday_date, new_holiday_desc.strip()):
+                        st.success(f"🎉 Đã thêm ngày nghỉ: {new_holiday_date.strftime('%d/%m/%Y')} - {new_holiday_desc}")
+                        st.rerun()
+                    else:
+                        st.error("😿 Lỗi khi thêm ngày nghỉ!")
             else:
                 st.warning("⚠️ Vui lòng nhập mô tả cho ngày nghỉ!")
     
@@ -1713,30 +1726,36 @@ with tab4:
             (date(current_year, 9, 2), "Ngày Quốc Khánh"),
         ]
         
-        if st.button("🇻🇳 Thêm Các Ngày Lễ Chính Năm " + str(current_year)):
-            added = 0
-            for hol_date, hol_desc in vn_holidays:
-                if db.add_holiday(hol_date, hol_desc):
-                    added += 1
-            st.success(f"🎉 Đã thêm {added} ngày lễ!")
-            st.rerun()
+        if st.button("🇻🇳 THÊM CÁC NGÀY LỄ CHÍNH NĂM " + str(current_year), key="add_vn_holidays"):
+            with st.spinner("Đang thêm ngày lễ..."):
+                time.sleep(0.3)
+                added = 0
+                for hol_date, hol_desc in vn_holidays:
+                    if db.add_holiday(hol_date, hol_desc):
+                        added += 1
+                if added > 0:
+                    st.success(f"🎉 Đã thêm {added} ngày lễ!")
+                    st.rerun()
+                else:
+                    st.info("ℹ️ Các ngày lễ đã tồn tại trong hệ thống.")
 
 # ==================== SIDEBAR ====================
 
 with st.sidebar:
     st.markdown("### ✨ Thống Kê Nhanh")
     
-    # Thống kê tháng hiện tại
-    today = date.today()
-    current_month_logs = db.get_work_logs_by_month(today.year, today.month)
-    
-    if current_month_logs:
-        total_hours = sum(log['total_hours'] for log in current_month_logs)
+    # Sử dụng cùng data với dashboard để đồng bộ
+    # dashboard_data đã được tính ở phần đầu
+    if total_days_month > 0:
+        st.metric("📅 Tháng này", f"{total_days_month} ngày làm")
+        st.metric("⏱️ Tổng giờ", calc.format_hours(total_hours_month))
+        st.metric("💰 Tổng lương", f"{total_salary_month:,.0f} Yen")
         
-        st.metric("Tháng này", f"{len(current_month_logs)} ngày")
-        st.metric("Tổng giờ làm", calc.format_hours(total_hours))
+        # Tính TB/ngày  
+        avg_daily = total_salary_month / total_days_month if total_days_month > 0 else 0
+        st.metric("📊 TB/ngày", f"{avg_daily:,.0f} Yen")
     else:
-        st.info("Chưa có dữ liệu tháng này")
+        st.info("📭 Chưa có dữ liệu tháng này")
     
     st.markdown("---")
     
@@ -1755,5 +1774,5 @@ with st.sidebar:
     st.markdown("---")
     
     # Version info
-    st.caption("© 2024 - Phát triển bởi AI")
+    st.caption("© 2026 - Phát triển bởi AI")
 
