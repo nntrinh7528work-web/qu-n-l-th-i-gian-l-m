@@ -8,7 +8,6 @@ import streamlit as st
 import hashlib
 import os
 import sqlite3
-import sqlite3
 try:
     import extra_streamlit_components as stx
     _COOKIE_MANAGER_OK = True
@@ -250,15 +249,22 @@ def set_remember_me_cookie(username: str, password_hash: str):
 
 def check_auto_login() -> bool:
     """Kiểm tra cookie để login tự động."""
+    # Đã đăng nhập rồi - không cần kiểm tra nữa
     if is_logged_in():
         return True
 
+    # Kiểm tra nếu đã check auto-login trong session này
+    if st.session_state.get("auto_login_checked", False):
+        return False
+
     if not _COOKIE_MANAGER_OK:
+        st.session_state["auto_login_checked"] = True
         return False
 
     try:
         cookie_manager = get_cookie_manager()
         if not cookie_manager:
+            st.session_state["auto_login_checked"] = True
             return False
             
         cookies = cookie_manager.get_all()
@@ -274,7 +280,8 @@ def check_auto_login() -> bool:
                    st.session_state["logged_in"] = True
                    st.session_state["user_info"] = user
                    st.session_state["user_db_path"] = None
-                   supabase_db.update_user_last_login(user['id'])
+                   st.session_state["auto_login_checked"] = True
+                   # Không cần update last_login ở đây để giảm DB write
                    return True
             else:
                 # Local SQLite verification
@@ -290,16 +297,13 @@ def check_auto_login() -> bool:
                     st.session_state["logged_in"] = True
                     st.session_state["user_info"] = dict(row)
                     st.session_state["user_db_path"] = get_user_db_path(username)
-                    
-                    # Update last login
-                    conn = sqlite3.connect(get_users_db_path())
-                    conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", (row['id'],))
-                    conn.commit()
-                    conn.close()
+                    st.session_state["auto_login_checked"] = True
+                    # Không cần update last login để tăng tốc
                     return True
     except Exception as e:
         print(f"Auto login error: {e}")
-        
+    
+    st.session_state["auto_login_checked"] = True
     return False
 
 

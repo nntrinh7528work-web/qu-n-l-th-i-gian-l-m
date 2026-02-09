@@ -31,6 +31,7 @@ from io import BytesIO
 
 # Import các module nội bộ
 import db_wrapper as db  # Tự động chọn Supabase hoặc SQLite
+import database  # Direct access for low-level operations
 import calculations as calc
 import user_auth as auth
 
@@ -201,8 +202,10 @@ if not auth.is_logged_in():
     auth.show_login_page()
     st.stop()
 
-# Đã đăng nhập - khởi tạo database cho user
-db.init_database()
+# Đã đăng nhập - khởi tạo database cho user (chỉ một lần)
+if "db_initialized" not in st.session_state:
+    db.init_database()
+    st.session_state.db_initialized = True
 
 # Hiển thị thông tin user ở sidebar
 auth.show_user_info_sidebar()
@@ -213,31 +216,47 @@ st.markdown('<h1 class="main-header">✨ Quản Lý Giờ Làm 🚀</h1>', unsaf
 
 # ==================== DASHBOARD TỔNG QUAN ====================
 
+# Hàm tính dashboard data với caching
+@st.cache_data(ttl=300, show_spinner=False)  # Cache 5 phút
+def get_dashboard_data(month, year, today_str):
+    """Lấy dữ liệu dashboard với caching."""
+    month_start = date(year, month, 1)
+    today = date.fromisoformat(today_str)
+    
+    # Lấy tất cả ca làm việc trong tháng
+    all_shifts_month = db.get_shifts_by_range(month_start, today)
+    all_jobs = db.get_all_jobs()
+    job_map = {j['id']: j for j in all_jobs}
+    
+    # Tính tổng
+    total_hours = 0
+    total_salary = 0
+    work_days = set()
+    
+    for shift in all_shifts_month:
+        hours = shift.get('total_hours', 0)
+        job_id = shift.get('job_id', 0)
+        hourly_rate = job_map.get(job_id, {}).get('hourly_rate', 0)
+        
+        total_hours += hours
+        total_salary += hours * hourly_rate
+        work_days.add(shift.get('work_date'))
+    
+    return {
+        'total_hours': total_hours,
+        'total_salary': total_salary,
+        'total_days': len(work_days)
+    }
+
 # Lấy dữ liệu tháng hiện tại
 current_month = date.today().month
 current_year = date.today().year
-month_start = date(current_year, current_month, 1)
 
-# Lấy tất cả ca làm việc trong tháng
-all_shifts_month = db.get_shifts_by_range(month_start, date.today())
-all_jobs = db.get_all_jobs()
-job_map_dashboard = {j['id']: j for j in all_jobs}
-
-# Tính tổng
-total_hours_month = 0
-total_salary_month = 0
-work_days_set = set()
-
-for shift in all_shifts_month:
-    hours = shift.get('total_hours', 0)
-    job_id = shift.get('job_id', 0)
-    hourly_rate = job_map_dashboard.get(job_id, {}).get('hourly_rate', 0)
-    
-    total_hours_month += hours
-    total_salary_month += hours * hourly_rate
-    work_days_set.add(shift.get('work_date'))
-
-total_days_month = len(work_days_set)
+# Sử dụng cached function
+dashboard_data = get_dashboard_data(current_month, current_year, date.today().isoformat())
+total_hours_month = dashboard_data['total_hours']
+total_salary_month = dashboard_data['total_salary']
+total_days_month = dashboard_data['total_days']
 
 # Hiển thị Dashboard
 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
@@ -1547,11 +1566,11 @@ with tab4:
                         
                         # Kiểm tra xem công việc có đang được sử dụng không
                         # Lấy số ca đang dùng công việc này
-                        shifts_using = db.get_connection()
-                        cursor = shifts_using.cursor()
+                        conn = database.get_connection()
+                        cursor = conn.cursor()
                         cursor.execute("SELECT COUNT(*) FROM work_shifts WHERE job_id = ?", (job['id'],))
                         count = cursor.fetchone()[0]
-                        shifts_using.close()
+                        conn.close()
                         
                         if count > 0:
                             st.warning(f"⚠️ Có {count} ca đang dùng công việc này")
