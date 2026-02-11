@@ -28,13 +28,12 @@ import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import calendar
 from io import BytesIO
-import time  # For loading states
+import time as time_module  # For loading states
 
 # Import các module nội bộ
 import db_wrapper as db  # Tự động chọn Supabase hoặc SQLite
 import database  # Direct access for low-level operations
 import calculations as calc
-import user_auth as auth
 
 # ==================== CẤU HÌNH TRANG ====================
 
@@ -172,27 +171,14 @@ CSS_STYLES = """
 st.markdown(CSS_STYLES, unsafe_allow_html=True)
 
 
-# ==================== KIỂM TRA ĐĂNG NHẬP ====================
-
-# Thử Auto-login từ cookie
-auth.check_auto_login()
-
-# Hiển thị trang đăng nhập nếu chưa đăng nhập
-if not auth.is_logged_in():
-    auth.show_login_page()
-    st.stop()
-
-# Đã đăng nhập - khởi tạo database cho user
-# Luôn gọi init để đảm bảo tất cả tables tồn tại (quan trọng trên Streamlit Cloud)
+# ==================== KHỞI TẠO DATABASE ====================
+# Khởi tạo database trực tiếp, không cần đăng nhập
 try:
     db.init_database()
     st.session_state.db_initialized = True
 except Exception as e:
     # Log error nhưng không dừng app
     print(f"Database init warning: {e}")
-
-# Hiển thị thông tin user ở sidebar
-auth.show_user_info_sidebar()
 
 # ==================== HEADER ====================
 
@@ -312,7 +298,7 @@ with tab1:
             if st.button("☀️ Ca Sáng 8h\n(8:00-17:00)", use_container_width=True, key="quick_morning"):
                 if default_job:
                     with st.spinner("Đang thêm ca sáng..."):
-                        time.sleep(0.3)
+                        time_module.sleep(0.3)
                         shift_id = db.add_work_shift(
                             work_date=date.today(),
                             shift_name="Ca Sáng",
@@ -334,7 +320,7 @@ with tab1:
             if st.button("🌙 Ca Tối 8h\n(17:00-02:00)", use_container_width=True, key="quick_evening"):
                 if default_job:
                     with st.spinner("Đang thêm ca tối..."):
-                        time.sleep(0.3)
+                        time_module.sleep(0.3)
                         shift_id = db.add_work_shift(
                             work_date=date.today(),
                             shift_name="Ca Tối",
@@ -356,7 +342,7 @@ with tab1:
             if st.button("⏰ Part-time 4h\n(17:00-21:00)", use_container_width=True, key="quick_parttime"):
                 if default_job:
                     with st.spinner("Đang thêm part-time..."):
-                        time.sleep(0.3)
+                        time_module.sleep(0.3)
                         shift_id = db.add_work_shift(
                             work_date=date.today(),
                             shift_name="Part-time",
@@ -378,7 +364,7 @@ with tab1:
             if st.button("🔥 Full Day 10h\n(8:00-19:00)", use_container_width=True, key="quick_fullday"):
                 if default_job:
                     with st.spinner("Đang thêm full day..."):
-                        time.sleep(0.3)
+                        time_module.sleep(0.3)
                         shift_id = db.add_work_shift(
                             work_date=date.today(),
                             shift_name="Full Day",
@@ -663,7 +649,7 @@ with tab1:
                 else:
                     # Xử lý thêm ca với loading state
                     with st.spinner("Đang thêm ca làm việc..."):
-                        time.sleep(0.3)
+                        time_module.sleep(0.3)
                         shift_id = db.add_work_shift(
                             work_date=work_date,
                             shift_name=shift_name,
@@ -1048,28 +1034,49 @@ with tab2:
                 
                 with col_save:
                     if st.button("💖 Lưu Thay Đổi", key=f"save_shift_{shift['id']}", type="primary"):
-                        success = db.update_work_shift(
-                            shift_id=shift['id'],
-                            shift_name=new_shift_name,
-                            start_time=new_start.strftime('%H:%M'),
-                            end_time=new_end.strftime('%H:%M'),
-                            break_hours=new_break,
-                            total_hours=new_total_hours,
-                            notes=new_notes
-                        )
-                        if success:
-                            st.success("🎉 Đã cập nhật ca làm việc!")
-                            st.rerun()
+                        # Validation
+                        if not new_shift_name or new_shift_name.strip() == "":
+                            st.error("❌ Tên ca không được để trống")
+                        elif new_total_hours <= 0:
+                            st.error("❌ Tổng giờ làm phải lớn hơn 0")
                         else:
-                            st.error("😿 Lỗi khi cập nhật!")
+                            with st.spinner("Đang lưu thay đổi..."):
+                                time_module.sleep(0.3)
+                                success = db.update_work_shift(
+                                    shift_id=shift['id'],
+                                    shift_name=new_shift_name,
+                                    start_time=new_start.strftime('%H:%M'),
+                                    end_time=new_end.strftime('%H:%M'),
+                                    break_hours=new_break,
+                                    total_hours=new_total_hours,
+                                    notes=new_notes
+                                )
+                            if success:
+                                st.success("🎉 Đã cập nhật ca làm việc!")
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error("😿 Lỗi khi cập nhật!")
                 
                 with col_del:
-                    if st.button("🗑️ Xóa Ca Này", key=f"delete_shift_{shift['id']}"):
-                        if db.delete_work_shift(shift['id']):
-                            st.success("🗑️ Đã xóa ca!")
+                    # Xác nhận xóa hai bước
+                    confirm_key = f'confirm_delete_{shift["id"]}'
+                    if st.session_state.get(confirm_key):
+                        st.warning("⚠️ Nhấn lại để xác nhận xóa")
+                        if st.button("❗ XÁC NHẬN XÓA", key=f"confirm_delete_shift_{shift['id']}", type="secondary"):
+                            with st.spinner("Đang xóa..."):
+                                time_module.sleep(0.3)
+                                if db.delete_work_shift(shift['id']):
+                                    st.success("🗑️ Đã xóa ca!")
+                                    st.session_state[confirm_key] = False
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.error("😿 Lỗi khi xóa!")
+                    else:
+                        if st.button("🗑️ Xóa Ca Này", key=f"delete_shift_{shift['id']}"):
+                            st.session_state[confirm_key] = True
                             st.rerun()
-                        else:
-                            st.error("😿 Lỗi khi xóa!")
     
     # Nút thêm ca mới cho ngày đã chọn
     st.markdown("---")
@@ -1109,22 +1116,36 @@ with tab2:
         
         st.write(f"⌛ **Giờ làm:** {add_total:.1f} giờ | 💝 **Lương ước tính:** {add_total * job_map.get(add_job, {}).get('hourly_rate', 0):,.0f} Yen")
         
-        if st.button("✨ Thêm Ca", type="primary", key="add_new_shift_calendar"):
-            shift_id = db.add_work_shift(
-                work_date=edit_date,
-                shift_name=add_name,
-                start_time=add_start.strftime('%H:%M'),
-                end_time=add_end.strftime('%H:%M'),
-                break_hours=add_break,
-                total_hours=add_total,
-                notes=add_notes,
-                job_id=add_job
-            )
-            if shift_id > 0:
-                st.success(f"🎉 Đã thêm ca làm việc cho ngày {edit_date.strftime('%d/%m/%Y')}!")
-                st.rerun()
+        if st.button("✨ THÊM CA", type="primary", key="add_new_shift_calendar"):
+            # Validation
+            validation_errors = []
+            if not add_name or add_name.strip() == "":
+                validation_errors.append("❌ Tên ca không được để trống")
+            if add_total <= 0:
+                validation_errors.append("❌ Tổng giờ làm phải lớn hơn 0")
+            
+            if validation_errors:
+                for err in validation_errors:
+                    st.error(err)
             else:
-                st.error("😿 Lỗi khi thêm ca!")
+                with st.spinner("Đang thêm ca..."):
+                    time_module.sleep(0.3)
+                    shift_id = db.add_work_shift(
+                        work_date=edit_date,
+                        shift_name=add_name,
+                        start_time=add_start.strftime('%H:%M'),
+                        end_time=add_end.strftime('%H:%M'),
+                        break_hours=add_break,
+                        total_hours=add_total,
+                        notes=add_notes,
+                        job_id=add_job
+                    )
+                if shift_id > 0:
+                    st.success(f"🎉 Đã thêm ca làm việc cho ngày {edit_date.strftime('%d/%m/%Y')}!")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("😿 Lỗi khi thêm ca!")
 
 # ==================== TAB 3: BÁO CÁO ====================
 
@@ -1486,7 +1507,7 @@ with tab4:
         
         if st.button("💖 LƯU GIờ CHUẨN", key="save_standard"):
             with st.spinner("Đang lưu..."):
-                time.sleep(0.3)
+                time_module.sleep(0.3)
                 if db.update_setting("standard_hours", str(new_standard)):
                     st.success(f"💫 Đã cập nhật giờ làm chuẩn: {new_standard} giờ")
                 else:
@@ -1505,7 +1526,7 @@ with tab4:
         
         if st.button("💖 LƯU GIờ NGHỈ", key="save_break"):
             with st.spinner("Đang lưu..."):
-                time.sleep(0.3)
+                time_module.sleep(0.3)
                 if db.update_setting("break_hours", str(new_break)):
                     st.success(f"💫 Đã cập nhật giờ nghỉ mặc định: {new_break} giờ")
                 else:
@@ -1551,7 +1572,7 @@ with tab4:
                     st.error("❌ Lương giờ phải lớn hơn 0")
                 else:
                     with st.spinner("Đang thêm công việc..."):
-                        time.sleep(0.3)
+                        time_module.sleep(0.3)
                         job_id = db.add_job(settings_job_name.strip(), settings_hourly_rate, settings_job_desc)
                         if job_id > 0:
                             st.success(f"✅ Đã thêm công việc: {settings_job_name}")
@@ -1682,7 +1703,7 @@ with tab4:
         if st.button("➕ THÊM NGÀY NGHỈ", type="primary", key="add_holiday_btn"):
             if new_holiday_desc.strip():
                 with st.spinner("Đang thêm ngày nghỉ..."):
-                    time.sleep(0.3)
+                    time_module.sleep(0.3)
                     if db.add_holiday(new_holiday_date, new_holiday_desc.strip()):
                         st.success(f"🎉 Đã thêm ngày nghỉ: {new_holiday_date.strftime('%d/%m/%Y')} - {new_holiday_desc}")
                         st.rerun()
@@ -1728,7 +1749,7 @@ with tab4:
         
         if st.button("🇻🇳 THÊM CÁC NGÀY LỄ CHÍNH NĂM " + str(current_year), key="add_vn_holidays"):
             with st.spinner("Đang thêm ngày lễ..."):
-                time.sleep(0.3)
+                time_module.sleep(0.3)
                 added = 0
                 for hol_date, hol_desc in vn_holidays:
                     if db.add_holiday(hol_date, hol_desc):
