@@ -309,7 +309,7 @@ with tab1:
                             notes="Nhập Nhanh",
                             job_id=default_job['id']
                         )
-                        if shift_id > 0:
+                        if shift_id and shift_id > 0:
                             st.success("✅ Đã thêm ca sáng 8h thành công!")
                             st.cache_data.clear()
                             st.rerun()
@@ -331,7 +331,7 @@ with tab1:
                             notes="Nhập Nhanh",
                             job_id=default_job['id']
                         )
-                        if shift_id > 0:
+                        if shift_id and shift_id > 0:
                             st.success("✅ Đã thêm ca tối 8h thành công!")
                             st.cache_data.clear()
                             st.rerun()
@@ -353,7 +353,7 @@ with tab1:
                             notes="Nhập Nhanh",
                             job_id=default_job['id']
                         )
-                        if shift_id > 0:
+                        if shift_id and shift_id > 0:
                             st.success("✅ Đã thêm part-time 4h thành công!")
                             st.cache_data.clear()
                             st.rerun()
@@ -375,7 +375,7 @@ with tab1:
                             notes="Nhập Nhanh",
                             job_id=default_job['id']
                         )
-                        if shift_id > 0:
+                        if shift_id and shift_id > 0:
                             st.success("✅ Đã thêm full day 10h thành công!")
                             st.cache_data.clear()
                             st.rerun()
@@ -516,7 +516,7 @@ with tab1:
             if st.button("Thêm Công Việc", key="btn_add_job", type="primary"):
                 if new_name and new_name.strip():
                     result = db.add_job(new_name.strip(), new_rate, "")
-                    if result > 0:
+                    if result and result > 0:
                         st.success(f"Da them: {new_name} - {new_rate} Yen/h")
                         st.rerun()
                     else:
@@ -661,7 +661,7 @@ with tab1:
                             job_id=selected_job_id
                         )
                     
-                    if shift_id > 0:
+                    if shift_id and shift_id > 0:
                         st.success(f"🎉 Đã thêm {shift_name} thành công!")
                         st.cache_data.clear()
                         st.rerun()
@@ -1140,7 +1140,7 @@ with tab2:
                         notes=add_notes,
                         job_id=add_job
                     )
-                if shift_id > 0:
+                if shift_id and shift_id > 0:
                     st.success(f"🎉 Đã thêm ca làm việc cho ngày {edit_date.strftime('%d/%m/%Y')}!")
                     st.cache_data.clear()
                     st.rerun()
@@ -1574,7 +1574,7 @@ with tab4:
                     with st.spinner("Đang thêm công việc..."):
                         time_module.sleep(0.3)
                         job_id = db.add_job(settings_job_name.strip(), settings_hourly_rate, settings_job_desc)
-                        if job_id > 0:
+                        if job_id and job_id > 0:
                             st.success(f"✅ Đã thêm công việc: {settings_job_name}")
                             st.cache_data.clear()
                             st.rerun()
