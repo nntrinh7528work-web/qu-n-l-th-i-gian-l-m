@@ -284,105 +284,71 @@ with tab1:
     # ==================== QUICK ENTRY MODE ====================
     st.markdown("### ⚡ Nhập Nhanh")
     
-    # Lấy danh sách công việc cho quick entry
+    # Lấy presets và jobs
+    presets = db.get_all_presets()
     quick_jobs = db.get_all_jobs()
     quick_job_map = {j['id']: j for j in quick_jobs}
     
-    if quick_jobs:
-        quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
+    if presets and quick_jobs:
+        # Chọn ngày và công việc cho nhập nhanh
+        qe_col_date, qe_col_job = st.columns([1, 2])
         
-        # Lấy job đầu tiên làm mặc định
-        default_job = quick_jobs[0] if quick_jobs else None
+        with qe_col_date:
+            quick_date = st.date_input(
+                "📅 Ngày:",
+                value=date.today(),
+                format="DD/MM/YYYY",
+                key="quick_entry_date"
+            )
         
-        with quick_col1:
-            if st.button("☀️ Ca Sáng 8h\n(8:00-17:00)", use_container_width=True, key="quick_morning"):
-                if default_job:
-                    with st.spinner("Đang thêm ca sáng..."):
-                        time_module.sleep(0.3)
-                        shift_id = db.add_work_shift(
-                            work_date=date.today(),
-                            shift_name="Ca Sáng",
-                            start_time="08:00",
-                            end_time="17:00",
-                            break_hours=1.0,
-                            total_hours=8.0,
-                            notes="Nhập Nhanh",
-                            job_id=default_job['id']
-                        )
-                        if shift_id and shift_id > 0:
-                            st.success("✅ Đã thêm ca sáng 8h thành công!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error("❌ Lỗi khi thêm ca sáng!")
+        with qe_col_job:
+            quick_job_id = st.radio(
+                "🏠 Công việc:",
+                options=[j['id'] for j in quick_jobs],
+                format_func=lambda x: f"{quick_job_map[x]['job_name']} ({quick_job_map[x]['hourly_rate']:,.0f}¥/h)",
+                horizontal=True,
+                key="quick_job_radio"
+            )
         
-        with quick_col2:
-            if st.button("🌙 Ca Tối 8h\n(17:00-02:00)", use_container_width=True, key="quick_evening"):
-                if default_job:
-                    with st.spinner("Đang thêm ca tối..."):
-                        time_module.sleep(0.3)
-                        shift_id = db.add_work_shift(
-                            work_date=date.today(),
-                            shift_name="Ca Tối",
-                            start_time="17:00",
-                            end_time="02:00",
-                            break_hours=1.0,
-                            total_hours=8.0,
-                            notes="Nhập Nhanh",
-                            job_id=default_job['id']
-                        )
-                        if shift_id and shift_id > 0:
-                            st.success("✅ Đã thêm ca tối 8h thành công!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error("❌ Lỗi khi thêm ca tối!")
+        # Hiển thị các preset buttons
+        num_presets = len(presets)
+        cols_per_row = min(num_presets, 4)
+        preset_cols = st.columns(cols_per_row)
         
-        with quick_col3:
-            if st.button("⏰ Part-time 4h\n(17:00-21:00)", use_container_width=True, key="quick_parttime"):
-                if default_job:
-                    with st.spinner("Đang thêm part-time..."):
-                        time_module.sleep(0.3)
-                        shift_id = db.add_work_shift(
-                            work_date=date.today(),
-                            shift_name="Part-time",
-                            start_time="17:00",
-                            end_time="21:00",
-                            break_hours=0.0,
-                            total_hours=4.0,
-                            notes="Nhập Nhanh",
-                            job_id=default_job['id']
-                        )
-                        if shift_id and shift_id > 0:
-                            st.success("✅ Đã thêm part-time 4h thành công!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error("❌ Lỗi khi thêm part-time!")
+        for idx, preset in enumerate(presets):
+            col_idx = idx % cols_per_row
+            with preset_cols[col_idx]:
+                btn_label = f"{preset['emoji']} {preset['preset_name']}\n({preset['start_time']}-{preset['end_time']})"
+                if st.button(btn_label, use_container_width=True, key=f"preset_{preset['id']}"):
+                    selected_job = quick_job_map.get(quick_job_id)
+                    if selected_job:
+                        with st.spinner(f"Đang thêm {preset['preset_name']}..."):
+                            time_module.sleep(0.3)
+                            shift_id = db.add_work_shift(
+                                work_date=quick_date,
+                                shift_name=preset['preset_name'],
+                                start_time=preset['start_time'],
+                                end_time=preset['end_time'],
+                                break_hours=preset['break_hours'],
+                                total_hours=preset['total_hours'],
+                                notes="Nhập Nhanh",
+                                job_id=selected_job['id']
+                            )
+                            if shift_id and shift_id > 0:
+                                hourly_rate = selected_job['hourly_rate']
+                                salary = preset['total_hours'] * hourly_rate
+                                st.success(f"✅ Đã thêm {preset['preset_name']} ({preset['total_hours']}h = {salary:,.0f}¥)")
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Lỗi khi thêm {preset['preset_name']}!")
         
-        with quick_col4:
-            if st.button("🔥 Full Day 10h\n(8:00-19:00)", use_container_width=True, key="quick_fullday"):
-                if default_job:
-                    with st.spinner("Đang thêm full day..."):
-                        time_module.sleep(0.3)
-                        shift_id = db.add_work_shift(
-                            work_date=date.today(),
-                            shift_name="Full Day",
-                            start_time="08:00",
-                            end_time="19:00",
-                            break_hours=1.0,
-                            total_hours=10.0,
-                            notes="Nhập Nhanh",
-                            job_id=default_job['id']
-                        )
-                        if shift_id and shift_id > 0:
-                            st.success("✅ Đã thêm full day 10h thành công!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error("❌ Lỗi khi thêm full day!")
-        
-        st.caption(f"💡 Quick Entry sẽ log vào **{default_job['job_name']}** cho **hôm nay**")
+        st.caption(f"💡 Nhấn nút để nhập nhanh cho **{quick_job_map.get(quick_job_id, {}).get('job_name', '')}** ngày **{quick_date.strftime('%d/%m/%Y')}**")
+    else:
+        if not presets:
+            st.info("💡 Chưa có khung giờ mẫu. Hãy thêm trong ⚙️ Cài Đặt!")
+        if not quick_jobs:
+            st.warning("⚠️ Chưa có công việc nào. Hãy thêm công việc bên dưới!")
     
     st.markdown("---")
     
@@ -1619,6 +1585,109 @@ with tab4:
                     st.success(f"💫 Đã cập nhật giờ nghỉ mặc định: {new_break} giờ")
                 else:
                     st.error("😿 Lỗi khi lưu!")
+    
+    st.markdown("---")
+    
+    # ==================== KHUNG GIỜ MẪU ====================
+    st.subheader("⚡ Quản Lý Khung Giờ Mẫu (Nhập Nhanh)")
+    
+    col_preset1, col_preset2 = st.columns([1, 2])
+    
+    with col_preset1:
+        st.markdown("**➕ Thêm Khung Giờ Mới**")
+        
+        emoji_options = ["☀️", "🌙", "⏰", "🔥", "🌸", "⭐", "💼", "🏥", "🏪", "🎯"]
+        
+        p_emoji = st.selectbox(
+            "Emoji:",
+            options=emoji_options,
+            index=0,
+            key="preset_emoji"
+        )
+        
+        p_name = st.text_input(
+            "Tên khung giờ:",
+            placeholder="VD: Ca sáng BV, Ca tối KB...",
+            key="preset_name_input"
+        )
+        
+        p_col_start, p_col_end = st.columns(2)
+        with p_col_start:
+            p_start = st.time_input("Bắt đầu:", value=time(8, 0), key="preset_start")
+        with p_col_end:
+            p_end = st.time_input("Kết thúc:", value=time(17, 0), key="preset_end")
+        
+        p_break = st.number_input(
+            "Giờ nghỉ (h):", min_value=0.0, max_value=3.0, value=1.0, step=0.25,
+            key="preset_break"
+        )
+        
+        # Tính tổng giờ tự động
+        start_minutes = p_start.hour * 60 + p_start.minute
+        end_minutes = p_end.hour * 60 + p_end.minute
+        if end_minutes <= start_minutes:
+            end_minutes += 24 * 60  # Ca qua đêm
+        auto_total = (end_minutes - start_minutes) / 60 - p_break
+        auto_total = max(0, auto_total)
+        
+        p_total = st.number_input(
+            "Tổng giờ làm:", min_value=0.0, max_value=24.0, value=auto_total, step=0.5,
+            key="preset_total",
+            help="Tự động tính từ giờ bắt đầu/kết thúc/nghỉ. Có thể chỉnh tay."
+        )
+        
+        if st.button("➕ THÊM KHUNG GIỜ", type="primary", key="add_preset_btn"):
+            if p_name and p_name.strip():
+                if p_total > 0:
+                    result = db.add_preset(
+                        preset_name=p_name.strip(),
+                        start_time=p_start.strftime("%H:%M"),
+                        end_time=p_end.strftime("%H:%M"),
+                        break_hours=p_break,
+                        total_hours=p_total,
+                        emoji=p_emoji
+                    )
+                    if result:
+                        st.success(f"✅ Đã thêm: {p_emoji} {p_name}")
+                        st.rerun()
+                    else:
+                        st.error("❌ Lỗi khi thêm!")
+                else:
+                    st.error("❌ Tổng giờ phải lớn hơn 0!")
+            else:
+                st.warning("⚠️ Vui lòng nhập tên khung giờ!")
+    
+    with col_preset2:
+        st.markdown("**📋 Danh Sách Khung Giờ Mẫu**")
+        
+        all_presets = db.get_all_presets()
+        
+        if all_presets:
+            for preset in all_presets:
+                col_info, col_del = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"""
+                    <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 0.5rem;
+                                border-left: 3px solid #667eea; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>{preset['emoji']} {preset['preset_name']}</strong>
+                            <span style="opacity: 0.7; margin-left: 8px;">
+                                {preset['start_time']} → {preset['end_time']} &nbsp;|&nbsp; 
+                                Nghỉ: {preset['break_hours']}h &nbsp;|&nbsp; 
+                                <strong>{preset['total_hours']}h</strong>
+                            </span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_del:
+                    if st.button("🗑️", key=f"del_preset_{preset['id']}", help=f"Xóa {preset['preset_name']}"):
+                        if db.delete_preset(preset['id']):
+                            st.success(f"Đã xóa: {preset['preset_name']}")
+                            st.rerun()
+                        else:
+                            st.error("Lỗi!")
+        else:
+            st.info("🌸 Chưa có khung giờ mẫu. Hãy thêm mới!")
     
     st.markdown("---")
     

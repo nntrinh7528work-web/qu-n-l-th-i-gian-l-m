@@ -49,6 +49,30 @@ def is_cloud_mode() -> bool:
     return _check_supabase()
 
 
+# ==================== SHIFT PRESETS ====================
+
+def get_all_presets() -> List[Dict]:
+    """Lấy tất cả khung giờ mẫu."""
+    return sqlite_db.get_all_presets()
+
+
+def add_preset(preset_name: str, start_time: str, end_time: str,
+               break_hours: float, total_hours: float,
+               job_id: int = None, emoji: str = "⏰") -> Optional[int]:
+    """Thêm khung giờ mẫu mới."""
+    return sqlite_db.add_preset(preset_name, start_time, end_time, break_hours, total_hours, job_id, emoji)
+
+
+def update_preset(preset_id: int, **kwargs) -> bool:
+    """Cập nhật khung giờ mẫu."""
+    return sqlite_db.update_preset(preset_id, **kwargs)
+
+
+def delete_preset(preset_id: int) -> bool:
+    """Xóa khung giờ mẫu."""
+    return sqlite_db.delete_preset(preset_id)
+
+
 # ==================== JOBS ====================
 
 def get_all_jobs() -> List[Dict]:

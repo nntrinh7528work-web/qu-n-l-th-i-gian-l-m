@@ -118,7 +118,6 @@ def init_database() -> None:
     """)
     
     # Bảng mới: Lưu các ca làm việc (hỗ trợ nhiều ca/ngày)
-    # Cấu trúc đã được cập nhật theo yêu cầu
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS work_shifts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,6 +149,23 @@ def init_database() -> None:
         cursor.execute("ALTER TABLE work_shifts ADD COLUMN job_id INTEGER DEFAULT 1")
     if 'overtime_hours' not in columns:
         cursor.execute("ALTER TABLE work_shifts ADD COLUMN overtime_hours REAL DEFAULT 0.0")
+
+    # Bảng lưu khung giờ mẫu (shift presets)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS shift_presets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            preset_name TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            break_hours REAL DEFAULT 0.0,
+            total_hours REAL NOT NULL,
+            job_id INTEGER,
+            emoji TEXT DEFAULT '⏰',
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
+        )
+    """)
 
     # Bảng lưu ngày nghỉ lễ
     cursor.execute("""
@@ -197,6 +213,22 @@ def init_database() -> None:
                 VALUES (?, ?, ?, ?)
             """, (name, rate, desc, color))
     
+    # Thêm khung giờ mẫu mặc định nếu chưa có
+    cursor.execute("SELECT COUNT(*) FROM shift_presets")
+    if cursor.fetchone()[0] == 0:
+        default_presets = [
+            ('Ca Sáng 8h', '08:00', '17:00', 1.0, 8.0, '☀️', 1),
+            ('Ca Tối 8h', '17:00', '02:00', 1.0, 8.0, '🌙', 2),
+            ('Part-time 4h', '17:00', '21:00', 0.0, 4.0, '⏰', 3),
+            ('Full Day 10h', '08:00', '19:00', 1.0, 10.0, '🔥', 4),
+        ]
+        
+        for name, start, end, brk, total, emoji, order in default_presets:
+            cursor.execute("""
+                INSERT INTO shift_presets (preset_name, start_time, end_time, break_hours, total_hours, emoji, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (name, start, end, brk, total, emoji, order))
+    
     conn.commit()
     conn.close()
 
@@ -208,6 +240,97 @@ def _sync_to_github():
     """Đồng bộ database của user hiện tại lên GitHub (Placeholder)."""
     # TODO: Implement actual sync logic properly later
     pass
+
+
+# ==================== SHIFT PRESETS (Khung giờ mẫu) ====================
+
+def get_all_presets() -> List[Dict]:
+    """Lấy tất cả khung giờ mẫu."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM shift_presets ORDER BY sort_order ASC, id ASC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception:
+        return []
+
+
+def add_preset(preset_name: str, start_time: str, end_time: str, 
+               break_hours: float, total_hours: float, 
+               job_id: int = None, emoji: str = "⏰") -> Optional[int]:
+    """Thêm khung giờ mẫu mới."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Lấy sort_order tiếp theo
+        cursor.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM shift_presets")
+        next_order = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            INSERT INTO shift_presets (preset_name, start_time, end_time, break_hours, total_hours, job_id, emoji, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (preset_name, start_time, end_time, break_hours, total_hours, job_id, emoji, next_order))
+        
+        preset_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return preset_id
+    except Exception as e:
+        print(f"Error adding preset: {e}")
+        return None
+
+
+def update_preset(preset_id: int, **kwargs) -> bool:
+    """Cập nhật khung giờ mẫu."""
+    try:
+        if not kwargs:
+            return False
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        fields = []
+        values = []
+        allowed = ['preset_name', 'start_time', 'end_time', 'break_hours', 
+                    'total_hours', 'job_id', 'emoji', 'sort_order']
+        
+        for key, value in kwargs.items():
+            if key in allowed:
+                fields.append(f"{key} = ?")
+                values.append(value)
+        
+        if not fields:
+            conn.close()
+            return False
+        
+        values.append(preset_id)
+        cursor.execute(f"UPDATE shift_presets SET {', '.join(fields)} WHERE id = ?", values)
+        conn.commit()
+        success = cursor.rowcount > 0
+        conn.close()
+        return success
+    except Exception as e:
+        print(f"Error updating preset: {e}")
+        return False
+
+
+def delete_preset(preset_id: int) -> bool:
+    """Xóa khung giờ mẫu."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM shift_presets WHERE id = ?", (preset_id,))
+        conn.commit()
+        success = cursor.rowcount > 0
+        conn.close()
+        return success
+    except Exception as e:
+        print(f"Error deleting preset: {e}")
+        return False
+
 
 # ==================== JOBS (Công việc và lương giờ) ====================
 
