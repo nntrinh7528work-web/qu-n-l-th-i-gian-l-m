@@ -856,27 +856,112 @@ with tab2:
             st.markdown("---")
             st.subheader("🌈 Tổng Kết Tháng")
             
-            total_days = len(work_logs)
-            total_hours = sum(log['total_hours'] for log in work_logs)
+            # Tính lương chi tiết
+            salary_data = db.calculate_salary_by_month(selected_year, selected_month)
+            
+            total_days = salary_data['total_days']
+            total_hours = salary_data['total_hours']
             avg_hours = total_hours / total_days if total_days > 0 else 0
             
-            # Hiển thị metrics (không có OT)
-            col1, col2, col3 = st.columns(3)
+            # Hiển thị metrics chính
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric(
-                    label="📅 Ngày Làm Việc",
-                    value=f"{total_days} ngày"
-                )
+                st.markdown(f"""
+                <div class="stat-card" style="background: linear-gradient(135deg, #FF0080 0%, #7928CA 100%);">
+                    <h3>📅 {total_days}</h3>
+                    <p>Ngày Làm</p>
+                </div>
+                """, unsafe_allow_html=True)
             with col2:
-                st.metric(
-                    label="⏱️ Tổng Giờ Làm",
-                    value=calc.format_hours(total_hours)
-                )
+                st.markdown(f"""
+                <div class="stat-card" style="background: linear-gradient(135deg, #4AF699 0%, #12B886 100%);">
+                    <h3>⏱️ {total_hours:.1f}h</h3>
+                    <p>Tổng Giờ</p>
+                </div>
+                """, unsafe_allow_html=True)
             with col3:
-                st.metric(
-                    label="📊 Trung Bình/Ngày",
-                    value=calc.format_hours(avg_hours)
-                )
+                st.markdown(f"""
+                <div class="stat-card" style="background: linear-gradient(135deg, #00C6FB 0%, #005BEA 100%);">
+                    <h3>📊 {avg_hours:.1f}h</h3>
+                    <p>TB/Ngày</p>
+                </div>
+                """, unsafe_allow_html=True)
+            with col4:
+                st.markdown(f"""
+                <div class="stat-card" style="background: linear-gradient(135deg, #FFD700 0%, #FF8C00 100%);">
+                    <h3>💰 {salary_data['total_salary']:,.0f}</h3>
+                    <p>Tổng Lương (¥)</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Chi tiết lương theo từng công việc
+            if salary_data['jobs']:
+                st.markdown("")
+                st.markdown("#### 💼 Chi Tiết Lương Theo Công Việc")
+                
+                for job in salary_data['jobs']:
+                    job_color = job.get('color', '#667eea')
+                    st.markdown(f"""
+                    <div style="background: rgba(255,255,255,0.05); border-left: 4px solid {job_color}; 
+                                border-radius: 12px; padding: 1rem; margin: 0.5rem 0;
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                            <div>
+                                <strong style="font-size: 1.1rem;">{job['job_name']}</strong>
+                                <span style="opacity: 0.7; margin-left: 8px;">({job['hourly_rate']:,.0f} ¥/h)</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <strong style="font-size: 1.3rem; color: #FFD700;">{job['base_salary']:,.0f} ¥</strong>
+                            </div>
+                        </div>
+                        <div style="opacity: 0.7; margin-top: 4px; font-size: 0.85rem;">
+                            🕐 {job['total_hours']:.1f} giờ &nbsp;|&nbsp; 📋 {job['shift_count']} ca
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Hiển thị thêm OT nếu có
+            if salary_data['total_ot_hours'] > 0:
+                st.markdown("")
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, rgba(255, 107, 107, 0.1), rgba(255, 107, 107, 0.05)); 
+                            border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 12px; padding: 1rem; margin: 0.5rem 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <strong>⏰ Giờ Làm Thêm (OT)</strong>
+                            <span style="opacity: 0.7; margin-left: 8px;">(x{salary_data['ot_rate']})</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="opacity: 0.7;">{salary_data['total_ot_hours']:.1f}h OT &nbsp;→&nbsp;</span>
+                            <strong style="font-size: 1.1rem; color: #FF6B6B;">+{salary_data['ot_bonus']:,.0f} ¥</strong>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Tổng lương cuối cùng
+            st.markdown("")
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+                        border: 2px solid #FFD700; border-radius: 16px; padding: 1.5rem; margin: 1rem 0;
+                        box-shadow: 0 4px 20px rgba(255, 215, 0, 0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <span style="font-size: 1.1rem; font-weight: 700;">💰 TỔNG LƯƠNG DỰ TÍNH</span>
+                        <div style="opacity: 0.6; font-size: 0.85rem; margin-top: 4px;">
+                            Tháng {selected_month}/{selected_year} &nbsp;|&nbsp; {total_days} ngày &nbsp;|&nbsp; {total_hours:.1f} giờ
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 2rem; font-weight: 800; 
+                                    background: linear-gradient(45deg, #FFD700, #FFA500);
+                                    -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                            {salary_data['total_salary']:,.0f} ¥
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("ℹ️ Chưa có dữ liệu giờ làm cho tháng này.")
     
@@ -897,16 +982,19 @@ with tab2:
             
             st.dataframe(df_display, use_container_width=True, hide_index=True)
             
-            # Tổng kết tháng (không OT)
+            # Tổng kết tháng với lương
             st.markdown("---")
-            total_days = len(work_logs)
-            total_hours = sum(log['total_hours'] for log in work_logs)
+            salary_data = db.calculate_salary_by_month(selected_year, selected_month)
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("📅 Số ngày làm việc", f"{total_days} ngày")
+                st.metric("📅 Ngày làm", f"{salary_data['total_days']} ngày")
             with col2:
-                st.metric("⌛ Tổng giờ làm", calc.format_hours(total_hours))
+                st.metric("⏱️ Tổng giờ", calc.format_hours(salary_data['total_hours']))
+            with col3:
+                st.metric("📊 TB/ngày", calc.format_hours(salary_data['total_hours'] / salary_data['total_days'] if salary_data['total_days'] > 0 else 0))
+            with col4:
+                st.metric("💰 Tổng lương", f"{salary_data['total_salary']:,.0f} ¥")
         else:
             st.info("ℹ️ Chưa có dữ liệu giờ làm cho tháng này.")
     

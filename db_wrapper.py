@@ -188,3 +188,8 @@ def get_work_logs_by_range(start_date: date, end_date: date) -> List[Dict]:
 def delete_work_log(work_date: date) -> bool:
     """Delete all work logs/shifts for a date."""
     return sqlite_db.delete_work_log(work_date)
+
+
+def calculate_salary_by_month(year: int, month: int) -> Dict:
+    """Tính lương theo tháng, phân chia theo từng công việc."""
+    return sqlite_db.calculate_salary_by_month(year, month)
