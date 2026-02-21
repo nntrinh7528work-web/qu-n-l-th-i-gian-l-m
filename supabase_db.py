@@ -435,16 +435,15 @@ def get_default_break_hours(user_id: int) -> float:
 # ==================== SHIFT PRESETS ====================
 
 def get_all_presets(user_id: int) -> List[Dict]:
-    """Lấy tất cả khung giờ mẫu của user."""
+    """Lấy tất cả khung giờ mẫu của user.
+    Không bắt exception - để wrapper xử lý fallback sang SQLite.
+    """
     client = get_supabase_client()
     if not client:
-        return []
+        raise ConnectionError("No Supabase client")
     
-    try:
-        result = client.table('shift_presets').select('*').eq('user_id', user_id).order('sort_order').execute()
-        return result.data or []
-    except:
-        return []
+    result = client.table('shift_presets').select('*').eq('user_id', user_id).order('sort_order').execute()
+    return result.data or []
 
 
 def add_preset(user_id: int, preset_name: str, start_time: str, end_time: str,
@@ -453,63 +452,53 @@ def add_preset(user_id: int, preset_name: str, start_time: str, end_time: str,
     """Thêm khung giờ mẫu mới."""
     client = get_supabase_client()
     if not client:
-        return None
+        raise ConnectionError("No Supabase client")
     
-    try:
-        data = {
-            'user_id': user_id,
-            'preset_name': preset_name,
-            'start_time': start_time,
-            'end_time': end_time,
-            'break_hours': break_hours,
-            'total_hours': total_hours,
-            'emoji': emoji,
-            'sort_order': sort_order
-        }
-        if job_id is not None:
-            data['job_id'] = job_id
-        
-        result = client.table('shift_presets').insert(data).execute()
-        if result.data:
-            return result.data[0]['id']
-        return None
-    except Exception as e:
-        print(f"Error adding preset: {e}")
-        return None
+    data = {
+        'user_id': user_id,
+        'preset_name': preset_name,
+        'start_time': start_time,
+        'end_time': end_time,
+        'break_hours': break_hours,
+        'total_hours': total_hours,
+        'emoji': emoji,
+        'sort_order': sort_order
+    }
+    if job_id is not None:
+        data['job_id'] = job_id
+    
+    result = client.table('shift_presets').insert(data).execute()
+    if result.data:
+        return result.data[0]['id']
+    return None
 
 
 def update_preset(user_id: int, preset_id: int, **kwargs) -> bool:
     """Cập nhật khung giờ mẫu."""
     client = get_supabase_client()
     if not client:
-        return False
+        raise ConnectionError("No Supabase client")
     
-    try:
-        update_data = {}
-        allowed_fields = ['preset_name', 'start_time', 'end_time', 'break_hours', 
-                          'total_hours', 'job_id', 'emoji', 'sort_order']
-        for key, value in kwargs.items():
-            if key in allowed_fields:
-                update_data[key] = value
-        
-        if update_data:
-            client.table('shift_presets').update(update_data).eq('id', preset_id).eq('user_id', user_id).execute()
-        return True
-    except:
-        return False
+    update_data = {}
+    allowed_fields = ['preset_name', 'start_time', 'end_time', 'break_hours', 
+                      'total_hours', 'job_id', 'emoji', 'sort_order']
+    for key, value in kwargs.items():
+        if key in allowed_fields:
+            update_data[key] = value
+    
+    if update_data:
+        client.table('shift_presets').update(update_data).eq('id', preset_id).eq('user_id', user_id).execute()
+    return True
 
 
 def delete_preset(user_id: int, preset_id: int) -> bool:
     """Xóa khung giờ mẫu."""
     client = get_supabase_client()
     if not client:
-        return False
+        raise ConnectionError("No Supabase client")
     
-    try:
-        client.table('shift_presets').delete().eq('id', preset_id).eq('user_id', user_id).execute()
-        return True
-    except:
-        return False
+    client.table('shift_presets').delete().eq('id', preset_id).eq('user_id', user_id).execute()
+    return True
 
 
 # ==================== INIT DEFAULT DATA ====================
