@@ -322,25 +322,24 @@ with tab1:
                 if st.button(btn_label, use_container_width=True, key=f"preset_{preset['id']}"):
                     selected_job = quick_job_map.get(quick_job_id)
                     if selected_job:
-                        with st.spinner(f"Đang thêm {preset['preset_name']}..."):
-                            shift_id = db.add_work_shift(
-                                work_date=quick_date,
-                                shift_name=preset['preset_name'],
-                                start_time=preset['start_time'],
-                                end_time=preset['end_time'],
-                                break_hours=preset['break_hours'],
-                                total_hours=preset['total_hours'],
-                                notes="Nhập Nhanh",
-                                job_id=selected_job['id']
-                            )
-                            if shift_id and shift_id > 0:
-                                hourly_rate = selected_job['hourly_rate']
-                                salary = preset['total_hours'] * hourly_rate
-                                st.success(f"✅ Đã thêm {preset['preset_name']} ({preset['total_hours']}h = {salary:,.0f}¥)")
-                                st.cache_data.clear()
-                                st.rerun()
-                            else:
-                                st.error(f"❌ Lỗi khi thêm {preset['preset_name']}!")
+                        shift_id = db.add_work_shift(
+                            work_date=quick_date,
+                            shift_name=preset['preset_name'],
+                            start_time=preset['start_time'],
+                            end_time=preset['end_time'],
+                            break_hours=preset['break_hours'],
+                            total_hours=preset['total_hours'],
+                            notes="Nhập Nhanh",
+                            job_id=selected_job['id']
+                        )
+                        if shift_id and shift_id > 0:
+                            hourly_rate = selected_job['hourly_rate']
+                            salary = preset['total_hours'] * hourly_rate
+                            st.toast(f"✅ {preset['preset_name']} ({preset['total_hours']}h = {salary:,.0f}¥)", icon="✅")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.toast(f"❌ Lỗi khi thêm {preset['preset_name']}!", icon="❌")
         
         st.caption(f"💡 Nhấn nút để nhập nhanh cho **{quick_job_map.get(quick_job_id, {}).get('job_name', '')}** ngày **{quick_date.strftime('%d/%m/%Y')}**")
     else:
@@ -612,25 +611,24 @@ with tab1:
                     for error in validation_errors:
                         st.error(error)
                 else:
-                    # Xử lý thêm ca với loading state
-                    with st.spinner("Đang thêm ca làm việc..."):
-                        shift_id = db.add_work_shift(
-                            work_date=work_date,
-                            shift_name=shift_name,
-                            start_time=start_str,
-                            end_time=end_str,
-                            break_hours=break_hours,
-                            total_hours=result['total_hours'],
-                            notes=notes,
-                            job_id=selected_job_id
-                        )
+                    # Thêm ca - không blocking UI
+                    shift_id = db.add_work_shift(
+                        work_date=work_date,
+                        shift_name=shift_name,
+                        start_time=start_str,
+                        end_time=end_str,
+                        break_hours=break_hours,
+                        total_hours=result['total_hours'],
+                        notes=notes,
+                        job_id=selected_job_id
+                    )
                     
                     if shift_id and shift_id > 0:
-                        st.success(f"🎉 Đã thêm {shift_name} thành công!")
+                        st.toast(f"🎉 Đã thêm {shift_name} thành công!", icon="✅")
                         st.cache_data.clear()
                         st.rerun()
                     else:
-                        st.error("😿 Lỗi khi thêm ca. Vui lòng thử lại!")
+                        st.toast("😿 Lỗi khi thêm ca. Vui lòng thử lại!", icon="❌")
         else:
             st.markdown(f"""
             <div class="error-box">
@@ -1092,22 +1090,21 @@ with tab2:
                         elif new_total_hours <= 0:
                             st.error("❌ Tổng giờ làm phải lớn hơn 0")
                         else:
-                            with st.spinner("Đang lưu thay đổi..."):
-                                success = db.update_work_shift(
-                                    shift_id=shift['id'],
-                                    shift_name=new_shift_name,
-                                    start_time=new_start.strftime('%H:%M'),
-                                    end_time=new_end.strftime('%H:%M'),
-                                    break_hours=new_break,
-                                    total_hours=new_total_hours,
-                                    notes=new_notes
-                                )
-                                if success:
-                                    st.success("🎉 Đã cập nhật ca làm việc!")
-                                    st.cache_data.clear()
-                                    st.rerun()
-                                else:
-                                    st.error("😿 Lỗi khi cập nhật!")
+                            success = db.update_work_shift(
+                                shift_id=shift['id'],
+                                shift_name=new_shift_name,
+                                start_time=new_start.strftime('%H:%M'),
+                                end_time=new_end.strftime('%H:%M'),
+                                break_hours=new_break,
+                                total_hours=new_total_hours,
+                                notes=new_notes
+                            )
+                            if success:
+                                st.toast("🎉 Đã cập nhật ca làm việc!", icon="✅")
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.toast("😿 Lỗi khi cập nhật!", icon="❌")
                 
                 with col_del:
                     # Xác nhận xóa hai bước
@@ -1115,14 +1112,13 @@ with tab2:
                     if st.session_state.get(confirm_key):
                         st.warning("⚠️ Nhấn lại để xác nhận xóa")
                         if st.button("❗ XÁC NHẬN XÓA", key=f"confirm_delete_shift_{shift['id']}", type="secondary"):
-                            with st.spinner("Đang xóa..."):
-                                if db.delete_work_shift(shift['id']):
-                                    st.success("🗑️ Đã xóa ca!")
-                                    st.session_state[confirm_key] = False
-                                    st.cache_data.clear()
-                                    st.rerun()
-                                else:
-                                    st.error("😿 Lỗi khi xóa!")
+                            if db.delete_work_shift(shift['id']):
+                                st.toast("🗑️ Đã xóa ca!", icon="✅")
+                                st.session_state[confirm_key] = False
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.toast("😿 Lỗi khi xóa!", icon="❌")
                     else:
                         if st.button("🗑️ Xóa Ca Này", key=f"delete_shift_{shift['id']}"):
                             st.session_state[confirm_key] = True
@@ -1178,23 +1174,22 @@ with tab2:
                 for err in validation_errors:
                     st.error(err)
             else:
-                with st.spinner("Đang thêm ca..."):
-                    shift_id = db.add_work_shift(
-                        work_date=edit_date,
-                        shift_name=add_name,
-                        start_time=add_start.strftime('%H:%M'),
-                        end_time=add_end.strftime('%H:%M'),
-                        break_hours=add_break,
-                        total_hours=add_total,
-                        notes=add_notes,
-                        job_id=add_job
-                    )
+                shift_id = db.add_work_shift(
+                    work_date=edit_date,
+                    shift_name=add_name,
+                    start_time=add_start.strftime('%H:%M'),
+                    end_time=add_end.strftime('%H:%M'),
+                    break_hours=add_break,
+                    total_hours=add_total,
+                    notes=add_notes,
+                    job_id=add_job
+                )
                 if shift_id and shift_id > 0:
-                    st.success(f"🎉 Đã thêm ca làm việc cho ngày {edit_date.strftime('%d/%m/%Y')}!")
+                    st.toast(f"🎉 Đã thêm ca cho ngày {edit_date.strftime('%d/%m/%Y')}!", icon="✅")
                     st.cache_data.clear()
                     st.rerun()
                 else:
-                    st.error("😿 Lỗi khi thêm ca!")
+                    st.toast("😿 Lỗi khi thêm ca!", icon="❌")
 
 # ==================== TAB 3: BÁO CÁO ====================
 
@@ -1555,11 +1550,10 @@ with tab4:
         )
         
         if st.button("💖 LƯU GIờ CHUẨN", key="save_standard"):
-            with st.spinner("Đang lưu..."):
-                if db.update_setting("standard_hours", str(new_standard)):
-                    st.success(f"💫 Đã cập nhật giờ làm chuẩn: {new_standard} giờ")
-                else:
-                    st.error("😿 Lỗi khi lưu!")
+            if db.update_setting("standard_hours", str(new_standard)):
+                st.toast(f"💫 Đã cập nhật giờ chuẩn: {new_standard}h", icon="✅")
+            else:
+                st.toast("😿 Lỗi khi lưu!", icon="❌")
     
     with col2:
         current_break = db.get_default_break_hours()
@@ -1573,11 +1567,10 @@ with tab4:
         )
         
         if st.button("💖 LƯU GIờ NGHỈ", key="save_break"):
-            with st.spinner("Đang lưu..."):
-                if db.update_setting("break_hours", str(new_break)):
-                    st.success(f"💫 Đã cập nhật giờ nghỉ mặc định: {new_break} giờ")
-                else:
-                    st.error("😿 Lỗi khi lưu!")
+            if db.update_setting("break_hours", str(new_break)):
+                st.toast(f"💫 Đã cập nhật giờ nghỉ: {new_break}h", icon="✅")
+            else:
+                st.toast("😿 Lỗi khi lưu!", icon="❌")
     
     st.markdown("---")
     
@@ -1721,14 +1714,13 @@ with tab4:
                 elif settings_hourly_rate <= 0:
                     st.error("❌ Lương giờ phải lớn hơn 0")
                 else:
-                    with st.spinner("Đang thêm công việc..."):
-                        job_id = db.add_job(settings_job_name.strip(), settings_hourly_rate, settings_job_desc)
-                        if job_id and job_id > 0:
-                            st.success(f"✅ Đã thêm công việc: {settings_job_name}")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error("❌ Lỗi khi thêm công việc!")
+                    job_id = db.add_job(settings_job_name.strip(), settings_hourly_rate, settings_job_desc)
+                    if job_id and job_id > 0:
+                        st.toast(f"✅ Đã thêm: {settings_job_name}", icon="✅")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.toast("❌ Lỗi khi thêm công việc!", icon="❌")
             else:
                 st.warning("⚠️ Vui lòng nhập tên công việc!")
     
@@ -1851,12 +1843,11 @@ with tab4:
         
         if st.button("➕ THÊM NGÀY NGHỈ", type="primary", key="add_holiday_btn"):
             if new_holiday_desc.strip():
-                with st.spinner("Đang thêm ngày nghỉ..."):
-                    if db.add_holiday(new_holiday_date, new_holiday_desc.strip()):
-                        st.success(f"🎉 Đã thêm ngày nghỉ: {new_holiday_date.strftime('%d/%m/%Y')} - {new_holiday_desc}")
-                        st.rerun()
-                    else:
-                        st.error("😿 Lỗi khi thêm ngày nghỉ!")
+                if db.add_holiday(new_holiday_date, new_holiday_desc.strip()):
+                    st.toast(f"🎉 Đã thêm: {new_holiday_date.strftime('%d/%m/%Y')}", icon="✅")
+                    st.rerun()
+                else:
+                    st.toast("😿 Lỗi khi thêm ngày nghỉ!", icon="❌")
             else:
                 st.warning("⚠️ Vui lòng nhập mô tả cho ngày nghỉ!")
     
@@ -1896,16 +1887,15 @@ with tab4:
         ]
         
         if st.button("🇻🇳 THÊM CÁC NGÀY LỄ CHÍNH NĂM " + str(current_year), key="add_vn_holidays"):
-            with st.spinner("Đang thêm ngày lễ..."):
-                added = 0
-                for hol_date, hol_desc in vn_holidays:
-                    if db.add_holiday(hol_date, hol_desc):
-                        added += 1
-                if added > 0:
-                    st.success(f"🎉 Đã thêm {added} ngày lễ!")
-                    st.rerun()
-                else:
-                    st.info("ℹ️ Các ngày lễ đã tồn tại trong hệ thống.")
+            added = 0
+            for hol_date, hol_desc in vn_holidays:
+                if db.add_holiday(hol_date, hol_desc):
+                    added += 1
+            if added > 0:
+                st.toast(f"🎉 Đã thêm {added} ngày lễ!", icon="✅")
+                st.rerun()
+            else:
+                st.toast("ℹ️ Đã có sẵn các ngày lễ", icon="ℹ️")
 
 # ==================== SIDEBAR ====================
 
