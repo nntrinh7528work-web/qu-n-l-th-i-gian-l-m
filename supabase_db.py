@@ -12,8 +12,19 @@ import os
 
 # ==================== SUPABASE CONNECTION ====================
 
+# Cached client singleton
+_cached_client = None
+_client_initialized = False
+
 def get_supabase_client() -> Optional[Client]:
-    """Lấy Supabase client từ secrets hoặc environment."""
+    """Lấy Supabase client (cached singleton - tạo 1 lần dùng mãi)."""
+    global _cached_client, _client_initialized
+    
+    # Return cached client nếu đã khởi tạo
+    if _client_initialized:
+        return _cached_client
+    
+    _client_initialized = True
     url = None
     key = None
     
@@ -36,12 +47,12 @@ def get_supabase_client() -> Optional[Client]:
     # Create client if we have credentials
     if url and key:
         try:
-            return create_client(url, key)
+            _cached_client = create_client(url, key)
         except Exception as e:
             print(f"Supabase client creation error: {e}")
-            return None
+            _cached_client = None
     
-    return None
+    return _cached_client
 
 
 # Store last error for debugging

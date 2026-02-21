@@ -326,6 +326,17 @@ def logout():
 def show_login_page():
     """Hiển thị trang đăng nhập/đăng ký."""
     
+    # CRITICAL: Check for successful login flag FIRST and rerun immediately
+    if st.session_state.get("_login_success", False):
+        st.session_state["_login_success"] = False
+        st.rerun()
+        return  # Safety fallback
+    
+    # Also check if already logged in (shouldn't reach here normally)
+    if is_logged_in():
+        st.rerun()
+        return
+    
     st.markdown("""
     <style>
         .auth-container {
@@ -425,27 +436,28 @@ def show_login_page():
             if _COOKIE_MANAGER_OK:
                 remember_me = st.checkbox("Ghi nhớ đăng nhập (30 ngày)")
             
-            submit = st.form_submit_button("Đăng Nhập", use_container_width=True, type="primary")
+            submit = st.form_submit_button("🔑 ĐĂNG NHẬP", use_container_width=True, type="primary")
             
             if submit:
                 if username and password:
                     success, message, user_info = login_user(username, password)
                     
                     if success:
+                        # Set session state
                         st.session_state["logged_in"] = True
                         st.session_state["user_info"] = user_info
                         st.session_state["user_db_path"] = get_user_db_path(username)
+                        st.session_state["_login_success"] = True  # Flag to rerun
                         
                         if remember_me:
                             set_remember_me_cookie(username, user_info['password_hash'])
-                            st.toast("Đã ghi nhớ đăng nhập!")
                         
-                        st.success(message)
-                        st.rerun()
+                        st.success(f"✅ {message} Đang chuyển hướng...")
+                        # Note: rerun will happen on next render cycle via flag check above
                     else:
-                        st.error(message)
+                        st.error(f"❌ {message}")
                 else:
-                    st.warning("Vui lòng nhập đầy đủ thông tin")
+                    st.warning("⚠️ Vui lòng nhập đầy đủ thông tin")
     
     with tab_register:
         st.subheader("Tạo tài khoản mới 🎉")

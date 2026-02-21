@@ -323,7 +323,6 @@ with tab1:
                     selected_job = quick_job_map.get(quick_job_id)
                     if selected_job:
                         with st.spinner(f"Đang thêm {preset['preset_name']}..."):
-                            time_module.sleep(0.3)
                             shift_id = db.add_work_shift(
                                 work_date=quick_date,
                                 shift_name=preset['preset_name'],
@@ -615,7 +614,6 @@ with tab1:
                 else:
                     # Xử lý thêm ca với loading state
                     with st.spinner("Đang thêm ca làm việc..."):
-                        time_module.sleep(0.3)
                         shift_id = db.add_work_shift(
                             work_date=work_date,
                             shift_name=shift_name,
@@ -1095,8 +1093,7 @@ with tab2:
                             st.error("❌ Tổng giờ làm phải lớn hơn 0")
                         else:
                             with st.spinner("Đang lưu thay đổi..."):
-                                time_module.sleep(0.3)
-                                success = db.update_work_shift(
+                                        success = db.update_work_shift(
                                     shift_id=shift['id'],
                                     shift_name=new_shift_name,
                                     start_time=new_start.strftime('%H:%M'),
@@ -1119,8 +1116,7 @@ with tab2:
                         st.warning("⚠️ Nhấn lại để xác nhận xóa")
                         if st.button("❗ XÁC NHẬN XÓA", key=f"confirm_delete_shift_{shift['id']}", type="secondary"):
                             with st.spinner("Đang xóa..."):
-                                time_module.sleep(0.3)
-                                if db.delete_work_shift(shift['id']):
+                                        if db.delete_work_shift(shift['id']):
                                     st.success("🗑️ Đã xóa ca!")
                                     st.session_state[confirm_key] = False
                                     st.cache_data.clear()
@@ -1729,7 +1725,6 @@ with tab4:
                     st.error("❌ Lương giờ phải lớn hơn 0")
                 else:
                     with st.spinner("Đang thêm công việc..."):
-                        time_module.sleep(0.3)
                         job_id = db.add_job(settings_job_name.strip(), settings_hourly_rate, settings_job_desc)
                         if job_id and job_id > 0:
                             st.success(f"✅ Đã thêm công việc: {settings_job_name}")
