@@ -1,8 +1,8 @@
 ﻿# -*- coding: utf-8 -*-
 """
 Database Wrapper - Tự động chọn Supabase (cloud) hoặc SQLite (local).
-Khi có Supabase: dùng user_id mặc định (không cần login) để dữ liệu lưu lâu dài.
-Khi không có Supabase: fallback sang SQLite.
+Chế độ ưu tiên: Supabase ONLY khi available, SQLite chỉ khi không có Supabase.
+Không còn fallback: khi dùng Supabase thì KHÔNG lưu SQLite.
 """
 
 from datetime import date
@@ -39,7 +39,7 @@ def _check_supabase() -> bool:
     return _supabase_available
 
 
-def _get_user_id() -> int:
+def _uid() -> int:
     """Luôn trả về default user ID (không cần login)."""
     return _DEFAULT_USER_ID
 
@@ -54,12 +54,7 @@ def is_cloud_mode() -> bool:
 def get_all_presets() -> List[Dict]:
     """Lấy tất cả khung giờ mẫu."""
     if _check_supabase():
-        try:
-            result = supabase_db.get_all_presets(_get_user_id())
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.get_all_presets(_uid())
     return sqlite_db.get_all_presets()
 
 
@@ -68,35 +63,24 @@ def add_preset(preset_name: str, start_time: str, end_time: str,
                job_id: int = None, emoji: str = "⏰") -> Optional[int]:
     """Thêm khung giờ mẫu mới."""
     if _check_supabase():
-        try:
-            result = supabase_db.add_preset(
-                _get_user_id(), preset_name, start_time, end_time,
-                break_hours, total_hours, job_id, emoji
-            )
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.add_preset(
+            _uid(), preset_name, start_time, end_time,
+            break_hours, total_hours, job_id, emoji
+        )
     return sqlite_db.add_preset(preset_name, start_time, end_time, break_hours, total_hours, job_id, emoji)
 
 
 def update_preset(preset_id: int, **kwargs) -> bool:
     """Cập nhật khung giờ mẫu."""
     if _check_supabase():
-        try:
-            return supabase_db.update_preset(_get_user_id(), preset_id, **kwargs)
-        except Exception:
-            pass
+        return supabase_db.update_preset(_uid(), preset_id, **kwargs)
     return sqlite_db.update_preset(preset_id, **kwargs)
 
 
 def delete_preset(preset_id: int) -> bool:
     """Xóa khung giờ mẫu."""
     if _check_supabase():
-        try:
-            return supabase_db.delete_preset(_get_user_id(), preset_id)
-        except Exception:
-            pass
+        return supabase_db.delete_preset(_uid(), preset_id)
     return sqlite_db.delete_preset(preset_id)
 
 
@@ -105,57 +89,39 @@ def delete_preset(preset_id: int) -> bool:
 def get_all_jobs() -> List[Dict]:
     """Lấy tất cả công việc."""
     if _check_supabase():
-        try:
-            result = supabase_db.get_all_jobs(_get_user_id())
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.get_all_jobs(_uid())
     return sqlite_db.get_all_jobs()
 
 
 def add_job(job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> Optional[int]:
     """Thêm công việc mới."""
     if _check_supabase():
-        try:
-            result = supabase_db.add_job(_get_user_id(), job_name, hourly_rate, description, color)
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.add_job(_uid(), job_name, hourly_rate, description, color)
     return sqlite_db.add_job(job_name, hourly_rate, description, color)
 
 
 def update_job(job_id: int, job_name: str, hourly_rate: float, description: str = "", color: str = "#667eea") -> bool:
     """Cập nhật công việc."""
     if _check_supabase():
-        try:
-            return supabase_db.update_job(job_id, job_name, hourly_rate, description, color)
-        except Exception:
-            pass
+        return supabase_db.update_job(job_id, job_name, hourly_rate, description, color)
     return sqlite_db.update_job(job_id, job_name, hourly_rate, description, color)
 
 
 def delete_job(job_id: int) -> bool:
     """Xóa công việc."""
     if _check_supabase():
-        try:
-            return supabase_db.delete_job(job_id)
-        except Exception:
-            pass
+        return supabase_db.delete_job(job_id)
     return sqlite_db.delete_job(job_id)
 
 
 def get_job_by_id(job_id: int) -> Optional[Dict]:
     """Lấy thông tin công việc theo ID."""
     if _check_supabase():
-        try:
-            jobs = supabase_db.get_all_jobs(_get_user_id())
-            for job in jobs:
-                if job['id'] == job_id:
-                    return job
-        except Exception:
-            pass
+        jobs = supabase_db.get_all_jobs(_uid())
+        for job in jobs:
+            if job['id'] == job_id:
+                return job
+        return None
     return sqlite_db.get_job_by_id(job_id)
 
 
@@ -173,28 +139,22 @@ def add_shift(
 ) -> Optional[int]:
     """Thêm ca làm việc mới."""
     if _check_supabase():
-        try:
-            # Chuyển đổi date nếu cần
-            if isinstance(work_date, str):
-                work_date_obj = date.fromisoformat(work_date)
-            else:
-                work_date_obj = work_date
-            
-            result = supabase_db.add_work_shift(
-                user_id=_get_user_id(),
-                work_date=work_date_obj,
-                shift_name="Ca làm",
-                start_time=start_time,
-                end_time=end_time,
-                break_hours=break_hours,
-                total_hours=total_hours,
-                notes=notes,
-                job_id=job_id
-            )
-            if result is not None:
-                return result
-        except Exception as e:
-            print(f"Supabase add_shift error: {e}")
+        if isinstance(work_date, str):
+            work_date_obj = date.fromisoformat(work_date)
+        else:
+            work_date_obj = work_date
+        
+        return supabase_db.add_work_shift(
+            user_id=_uid(),
+            work_date=work_date_obj,
+            shift_name="Ca làm",
+            start_time=start_time,
+            end_time=end_time,
+            break_hours=break_hours,
+            total_hours=total_hours,
+            notes=notes,
+            job_id=job_id
+        )
     return sqlite_db.add_shift(
         work_date, job_id, start_time, end_time,
         break_hours, total_hours, overtime_hours, notes
@@ -204,59 +164,50 @@ def add_shift(
 def update_shift(shift_id: int, **kwargs) -> bool:
     """Cập nhật ca làm việc."""
     if _check_supabase():
-        try:
-            # Map kwargs to supabase_db.update_work_shift params
-            return supabase_db.update_work_shift(
-                shift_id=shift_id,
-                shift_name=kwargs.get('shift_name', 'Ca làm'),
-                start_time=kwargs.get('start_time', '09:00'),
-                end_time=kwargs.get('end_time', '17:00'),
-                break_hours=kwargs.get('break_hours', 1.0),
-                total_hours=kwargs.get('total_hours', 8.0),
-                notes=kwargs.get('notes', '')
-            )
-        except Exception:
-            pass
+        return supabase_db.update_work_shift(
+            shift_id=shift_id,
+            shift_name=kwargs.get('shift_name', 'Ca làm'),
+            start_time=kwargs.get('start_time', '09:00'),
+            end_time=kwargs.get('end_time', '17:00'),
+            break_hours=kwargs.get('break_hours', 1.0),
+            total_hours=kwargs.get('total_hours', 8.0),
+            notes=kwargs.get('notes', '')
+        )
     return sqlite_db.update_shift(shift_id, **kwargs)
 
 
 def delete_shift(shift_id: int) -> bool:
     """Xóa ca làm việc."""
     if _check_supabase():
-        try:
-            return supabase_db.delete_work_shift(shift_id)
-        except Exception:
-            pass
+        return supabase_db.delete_work_shift(shift_id)
     return sqlite_db.delete_shift(shift_id)
 
 
 def get_shift_by_id(shift_id: int) -> Optional[Dict]:
     """Lấy shift theo ID."""
-    # Supabase doesn't have a direct get_shift_by_id, use SQLite
+    if _check_supabase():
+        # Supabase chưa có hàm riêng, tìm trong tất cả shifts
+        from datetime import timedelta
+        today = date.today()
+        shifts = get_shifts_by_range(today - timedelta(days=365), today + timedelta(days=30))
+        for s in shifts:
+            if s['id'] == shift_id:
+                return s
+        return None
     return sqlite_db.get_shift_by_id(shift_id)
 
 
 def get_shifts_by_date(work_date: date) -> List[Dict]:
     """Lấy các ca làm việc theo ngày."""
     if _check_supabase():
-        try:
-            result = supabase_db.get_shifts_by_date(_get_user_id(), work_date)
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.get_shifts_by_date(_uid(), work_date)
     return sqlite_db.get_shifts_by_date(work_date)
 
 
 def get_shifts_by_range(start_date: date, end_date: date) -> List[Dict]:
     """Lấy các ca làm việc trong khoảng thời gian."""
     if _check_supabase():
-        try:
-            result = supabase_db.get_shifts_by_range(_get_user_id(), start_date, end_date)
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.get_shifts_by_range(_uid(), start_date, end_date)
     return sqlite_db.get_shifts_by_range(start_date, end_date)
 
 
@@ -370,32 +321,21 @@ def get_daily_summaries_by_month(year: int, month: int, standard_hours: float = 
 def add_holiday(holiday_date: date, description: str) -> bool:
     """Thêm ngày nghỉ."""
     if _check_supabase():
-        try:
-            return supabase_db.add_holiday(_get_user_id(), holiday_date, description)
-        except Exception:
-            pass
+        return supabase_db.add_holiday(_uid(), holiday_date, description)
     return sqlite_db.add_holiday(holiday_date, description)
 
 
 def remove_holiday(holiday_date: date) -> bool:
     """Xóa ngày nghỉ."""
     if _check_supabase():
-        try:
-            return supabase_db.remove_holiday(_get_user_id(), holiday_date)
-        except Exception:
-            pass
+        return supabase_db.remove_holiday(_uid(), holiday_date)
     return sqlite_db.remove_holiday(holiday_date)
 
 
 def get_all_holidays() -> List[Dict]:
     """Lấy tất cả ngày nghỉ."""
     if _check_supabase():
-        try:
-            result = supabase_db.get_all_holidays(_get_user_id())
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.get_all_holidays(_uid())
     return sqlite_db.get_all_holidays()
 
 
@@ -408,10 +348,7 @@ def get_holidays_by_year(year: int) -> List[Dict]:
 def is_holiday(check_date: date) -> tuple:
     """Kiểm tra ngày nghỉ."""
     if _check_supabase():
-        try:
-            return supabase_db.is_holiday(_get_user_id(), check_date)
-        except Exception:
-            pass
+        return supabase_db.is_holiday(_uid(), check_date)
     return sqlite_db.is_holiday(check_date)
 
 
@@ -420,53 +357,36 @@ def is_holiday(check_date: date) -> tuple:
 def get_setting(key: str) -> Optional[str]:
     """Lấy cài đặt."""
     if _check_supabase():
-        try:
-            result = supabase_db.get_setting(_get_user_id(), key)
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        return supabase_db.get_setting(_uid(), key)
     return sqlite_db.get_setting(key)
 
 
 def update_setting(key: str, value: str) -> bool:
     """Cập nhật cài đặt."""
     if _check_supabase():
-        try:
-            return supabase_db.update_setting(_get_user_id(), key, value)
-        except Exception:
-            pass
+        return supabase_db.update_setting(_uid(), key, value)
     return sqlite_db.update_setting(key, value)
 
 
 def get_standard_hours() -> float:
     """Lấy số giờ chuẩn."""
     if _check_supabase():
-        try:
-            return supabase_db.get_standard_hours(_get_user_id())
-        except Exception:
-            pass
+        return supabase_db.get_standard_hours(_uid())
     return sqlite_db.get_standard_hours()
 
 
 def get_default_break_hours() -> float:
     """Lấy giờ nghỉ mặc định."""
     if _check_supabase():
-        try:
-            return supabase_db.get_default_break_hours(_get_user_id())
-        except Exception:
-            pass
+        return supabase_db.get_default_break_hours(_uid())
     return sqlite_db.get_default_break_hours()
 
 
 def get_ot_rate() -> float:
     """Lấy hệ số OT."""
     if _check_supabase():
-        try:
-            value = supabase_db.get_setting(_get_user_id(), 'ot_rate')
-            return float(value) if value else 1.25
-        except Exception:
-            pass
+        value = supabase_db.get_setting(_uid(), 'ot_rate')
+        return float(value) if value else 1.25
     return sqlite_db.get_ot_rate()
 
 
@@ -474,18 +394,18 @@ def get_ot_rate() -> float:
 
 def init_database():
     """Khởi tạo database."""
-    # Luôn init SQLite (cho fallback)
-    try:
-        sqlite_db.init_database()
-    except Exception as e:
-        print(f"SQLite init warning: {e}")
-    
-    # Init dữ liệu mặc định trên Supabase nếu có
     if _check_supabase():
+        # Chỉ dùng Supabase — không cần init SQLite
         try:
-            supabase_db.init_user_default_data(_get_user_id())
+            supabase_db.init_user_default_data(_uid())
         except Exception as e:
             print(f"Supabase init warning: {e}")
+    else:
+        # Fallback: dùng SQLite khi không có Supabase
+        try:
+            sqlite_db.init_database()
+        except Exception as e:
+            print(f"SQLite init warning: {e}")
 
 
 def clear_cache():
@@ -505,7 +425,6 @@ def calculate_salary_by_month(year: int, month: int) -> Dict:
     else:
         end_date = date(year, month + 1, 1) - timedelta(days=1)
     
-    # Lấy shifts từ nguồn dữ liệu đúng (Supabase hoặc SQLite)
     shifts = get_shifts_by_range(start_date, end_date)
     all_jobs = get_all_jobs()
     
