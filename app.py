@@ -28,7 +28,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import calendar
 from io import BytesIO
-import json
+
 
 
 # Import các module nội bộ
@@ -1676,92 +1676,11 @@ with tab4:
         else:
             st.info("🌸 Chưa có khung giờ mẫu. Hãy thêm mới!")
         
-        # ---------- SAO LƯU & KHÔI PHỤC ----------
-        st.markdown("---")
-        st.markdown("**💾 Sao Lưu & Khôi Phục Khung Giờ**")
-        
-        col_export, col_import = st.columns(2)
-        
-        with col_export:
-            if all_presets:
-                # Chuẩn bị dữ liệu export (chỉ giữ các field cần thiết)
-                export_data = []
-                for p in all_presets:
-                    export_data.append({
-                        "preset_name": p['preset_name'],
-                        "start_time": p['start_time'],
-                        "end_time": p['end_time'],
-                        "break_hours": p['break_hours'],
-                        "total_hours": p['total_hours'],
-                        "emoji": p['emoji'],
-                        "sort_order": p.get('sort_order', 0)
-                    })
-                
-                json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
-                
-                st.download_button(
-                    label=f"📥 Tải về ({len(export_data)} preset)",
-                    data=json_str,
-                    file_name="shift_presets_backup.json",
-                    mime="application/json",
-                    key="export_presets_btn",
-                    help="Tải file JSON chứa tất cả khung giờ mẫu"
-                )
-            else:
-                st.caption("Chưa có preset để sao lưu")
-        
-        with col_import:
-            uploaded_file = st.file_uploader(
-                "📤 Khôi phục từ file",
-                type=["json"],
-                key="import_presets_file",
-                help="Tải lên file JSON đã sao lưu trước đó",
-                label_visibility="collapsed"
-            )
-            
-            if uploaded_file is not None:
-                try:
-                    import_data = json.loads(uploaded_file.read().decode('utf-8'))
-                    
-                    if not isinstance(import_data, list):
-                        st.error("❌ File không đúng định dạng!")
-                    else:
-                        # Lấy tên preset hiện có để tránh trùng
-                        existing_names = set()
-                        if all_presets:
-                            existing_names = {p['preset_name'] for p in all_presets}
-                        
-                        added = 0
-                        skipped = 0
-                        for item in import_data:
-                            name = item.get('preset_name', '')
-                            if not name:
-                                continue
-                            if name in existing_names:
-                                skipped += 1
-                                continue
-                            
-                            result = db.add_preset(
-                                preset_name=name,
-                                start_time=item.get('start_time', '08:00'),
-                                end_time=item.get('end_time', '17:00'),
-                                break_hours=item.get('break_hours', 1.0),
-                                total_hours=item.get('total_hours', 8.0),
-                                emoji=item.get('emoji', '⏰')
-                            )
-                            if result:
-                                added += 1
-                        
-                        msg = f"✅ Đã khôi phục {added} preset"
-                        if skipped > 0:
-                            msg += f" (bỏ qua {skipped} trùng tên)"
-                        st.toast(msg, icon="✅")
-                        if added > 0:
-                            st.rerun()
-                except json.JSONDecodeError:
-                    st.error("❌ File JSON không hợp lệ!")
-                except Exception as e:
-                    st.error(f"❌ Lỗi: {str(e)}")
+        # Hiển thị trạng thái lưu trữ
+        if db.is_cloud_mode():
+            st.caption("☁️ Khung giờ mẫu được lưu trên **Supabase** — không bị mất khi cập nhật app")
+        else:
+            st.caption("💾 Khung giờ mẫu được lưu **cục bộ** — có thể mất khi redeploy")
     
     st.markdown("---")
     

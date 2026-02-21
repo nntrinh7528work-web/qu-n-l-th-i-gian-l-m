@@ -432,6 +432,86 @@ def get_default_break_hours(user_id: int) -> float:
     return float(value) if value else 1.0
 
 
+# ==================== SHIFT PRESETS ====================
+
+def get_all_presets(user_id: int) -> List[Dict]:
+    """Lấy tất cả khung giờ mẫu của user."""
+    client = get_supabase_client()
+    if not client:
+        return []
+    
+    try:
+        result = client.table('shift_presets').select('*').eq('user_id', user_id).order('sort_order').execute()
+        return result.data or []
+    except:
+        return []
+
+
+def add_preset(user_id: int, preset_name: str, start_time: str, end_time: str,
+               break_hours: float, total_hours: float,
+               job_id: int = None, emoji: str = "⏰", sort_order: int = 0) -> Optional[int]:
+    """Thêm khung giờ mẫu mới."""
+    client = get_supabase_client()
+    if not client:
+        return None
+    
+    try:
+        data = {
+            'user_id': user_id,
+            'preset_name': preset_name,
+            'start_time': start_time,
+            'end_time': end_time,
+            'break_hours': break_hours,
+            'total_hours': total_hours,
+            'emoji': emoji,
+            'sort_order': sort_order
+        }
+        if job_id is not None:
+            data['job_id'] = job_id
+        
+        result = client.table('shift_presets').insert(data).execute()
+        if result.data:
+            return result.data[0]['id']
+        return None
+    except Exception as e:
+        print(f"Error adding preset: {e}")
+        return None
+
+
+def update_preset(user_id: int, preset_id: int, **kwargs) -> bool:
+    """Cập nhật khung giờ mẫu."""
+    client = get_supabase_client()
+    if not client:
+        return False
+    
+    try:
+        update_data = {}
+        allowed_fields = ['preset_name', 'start_time', 'end_time', 'break_hours', 
+                          'total_hours', 'job_id', 'emoji', 'sort_order']
+        for key, value in kwargs.items():
+            if key in allowed_fields:
+                update_data[key] = value
+        
+        if update_data:
+            client.table('shift_presets').update(update_data).eq('id', preset_id).eq('user_id', user_id).execute()
+        return True
+    except:
+        return False
+
+
+def delete_preset(user_id: int, preset_id: int) -> bool:
+    """Xóa khung giờ mẫu."""
+    client = get_supabase_client()
+    if not client:
+        return False
+    
+    try:
+        client.table('shift_presets').delete().eq('id', preset_id).eq('user_id', user_id).execute()
+        return True
+    except:
+        return False
+
+
 # ==================== INIT DEFAULT DATA ====================
 
 def init_user_default_data(user_id: int):
@@ -455,5 +535,17 @@ def init_user_default_data(user_id: int):
             update_setting(user_id, 'break_hours', '1.0')
         if not get_setting(user_id, 'ot_rate'):
             update_setting(user_id, 'ot_rate', '1.25')
+        
+        # Thêm presets mặc định nếu chưa có
+        existing_presets = get_all_presets(user_id)
+        if not existing_presets:
+            default_presets = [
+                ('Ca Sáng 8h', '08:00', '17:00', 1.0, 8.0, '☀️', 1),
+                ('Ca Tối 8h', '17:00', '02:00', 1.0, 8.0, '🌙', 2),
+                ('Part-time 4h', '09:00', '13:00', 0.0, 4.0, '⏰', 3),
+                ('Full Day 10h', '07:00', '18:00', 1.0, 10.0, '🔥', 4),
+            ]
+            for name, start, end, brk, total, emoji, order in default_presets:
+                add_preset(user_id, name, start, end, brk, total, emoji=emoji, sort_order=order)
     except:
         pass
