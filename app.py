@@ -28,6 +28,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import calendar
 from io import BytesIO
+from streamlit_sortables import sort_items
 
 
 
@@ -1625,52 +1626,49 @@ with tab4:
                 st.warning("⚠️ Vui lòng nhập tên khung giờ!")
     
     with col_preset2:
-        st.markdown("**📋 Danh Sách Khung Giờ Mẫu**")
+        st.markdown("**📋 Danh Sách Khung Giờ Mẫu** *(kéo thả để sắp xếp)*")
         
         all_presets = db.get_all_presets()
         
         if all_presets:
-            for idx, preset in enumerate(all_presets):
-                col_info, col_up, col_down, col_del = st.columns([6, 0.5, 0.5, 0.5])
-                with col_info:
-                    st.markdown(f"""
-                    <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 0.5rem;
-                                border-left: 3px solid #667eea; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>{preset['emoji']} {preset['preset_name']}</strong>
-                            <span style="opacity: 0.7; margin-left: 8px;">
-                                {preset['start_time']} → {preset['end_time']} &nbsp;|&nbsp; 
-                                Nghỉ: {preset['break_hours']}h &nbsp;|&nbsp; 
-                                <strong>{preset['total_hours']}h</strong>
-                            </span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col_up:
-                    if idx > 0:
-                        if st.button("⬆️", key=f"up_preset_{preset['id']}", help="Di chuyển lên"):
-                            prev = all_presets[idx - 1]
-                            cur_order = preset.get('sort_order', idx)
-                            prev_order = prev.get('sort_order', idx - 1)
-                            db.update_preset(preset['id'], sort_order=prev_order)
-                            db.update_preset(prev['id'], sort_order=cur_order)
-                            st.rerun()
-                with col_down:
-                    if idx < len(all_presets) - 1:
-                        if st.button("⬇️", key=f"down_preset_{preset['id']}", help="Di chuyển xuống"):
-                            nxt = all_presets[idx + 1]
-                            cur_order = preset.get('sort_order', idx)
-                            nxt_order = nxt.get('sort_order', idx + 1)
-                            db.update_preset(preset['id'], sort_order=nxt_order)
-                            db.update_preset(nxt['id'], sort_order=cur_order)
-                            st.rerun()
-                with col_del:
-                    if st.button("🗑️", key=f"del_preset_{preset['id']}", help=f"Xóa {preset['preset_name']}"):
+            # Tạo labels kéo thả
+            preset_labels = [
+                f"{p['emoji']} {p['preset_name']}  •  {p['start_time']}→{p['end_time']}  •  {p['total_hours']}h"
+                for p in all_presets
+            ]
+            
+            # Drag-and-drop sorting
+            sorted_labels = sort_items(preset_labels, direction="vertical")
+            
+            # Kiểm tra thứ tự có thay đổi không
+            if sorted_labels != preset_labels:
+                # Tìm preset tương ứng theo label và cập nhật sort_order
+                label_to_preset = {}
+                for i, p in enumerate(all_presets):
+                    label = f"{p['emoji']} {p['preset_name']}  •  {p['start_time']}→{p['end_time']}  •  {p['total_hours']}h"
+                    label_to_preset[label] = p
+                
+                for new_order, label in enumerate(sorted_labels):
+                    preset = label_to_preset.get(label)
+                    if preset and preset.get('sort_order', 0) != new_order:
+                        db.update_preset(preset['id'], sort_order=new_order)
+                
+                st.toast("✅ Đã cập nhật thứ tự!", icon="✅")
+                st.rerun()
+            
+            # Nút xóa từng preset
+            st.markdown("**🗑️ Xóa preset:**")
+            del_cols = st.columns(min(len(all_presets), 4))
+            for i, preset in enumerate(all_presets):
+                with del_cols[i % min(len(all_presets), 4)]:
+                    if st.button(
+                        f"❌ {preset['emoji']} {preset['preset_name']}", 
+                        key=f"del_preset_{preset['id']}",
+                        use_container_width=True
+                    ):
                         if db.delete_preset(preset['id']):
                             st.toast(f"Đã xóa: {preset['preset_name']}", icon="🗑️")
                             st.rerun()
-                        else:
-                            st.error("Lỗi!")
         else:
             st.info("🌸 Chưa có khung giờ mẫu. Hãy thêm mới!")
         
