@@ -562,7 +562,6 @@ with tab1:
         if result["success"]:
             # Tính tổng ngày nếu thêm ca này
             new_total_day = (total_hours_day if existing_shifts else 0) + result['total_hours']
-            new_ot_day = max(0, new_total_day - standard_hours)
             
             # Hiển thị preview
             is_overnight = end_time <= start_time
@@ -882,25 +881,6 @@ with tab2:
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-            
-            # Hiển thị thêm OT nếu có
-            if salary_data['total_ot_hours'] > 0:
-                st.markdown("")
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, rgba(255, 107, 107, 0.1), rgba(255, 107, 107, 0.05)); 
-                            border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 12px; padding: 1rem; margin: 0.5rem 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                        <div>
-                            <strong>⏰ Giờ Làm Thêm (OT)</strong>
-                            <span style="opacity: 0.7; margin-left: 8px;">(x{salary_data['ot_rate']})</span>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="opacity: 0.7;">{salary_data['total_ot_hours']:.1f}h OT &nbsp;→&nbsp;</span>
-                            <strong style="font-size: 1.1rem; color: #FF6B6B;">+{salary_data['ot_bonus']:,.0f} ¥</strong>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
             
             # Tổng lương cuối cùng
             st.markdown("")
@@ -1650,8 +1630,8 @@ with tab4:
         all_presets = db.get_all_presets()
         
         if all_presets:
-            for preset in all_presets:
-                col_info, col_del = st.columns([4, 1])
+            for idx, preset in enumerate(all_presets):
+                col_info, col_up, col_down, col_del = st.columns([6, 0.5, 0.5, 0.5])
                 with col_info:
                     st.markdown(f"""
                     <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 0.5rem;
@@ -1666,10 +1646,28 @@ with tab4:
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+                with col_up:
+                    if idx > 0:
+                        if st.button("⬆️", key=f"up_preset_{preset['id']}", help="Di chuyển lên"):
+                            prev = all_presets[idx - 1]
+                            cur_order = preset.get('sort_order', idx)
+                            prev_order = prev.get('sort_order', idx - 1)
+                            db.update_preset(preset['id'], sort_order=prev_order)
+                            db.update_preset(prev['id'], sort_order=cur_order)
+                            st.rerun()
+                with col_down:
+                    if idx < len(all_presets) - 1:
+                        if st.button("⬇️", key=f"down_preset_{preset['id']}", help="Di chuyển xuống"):
+                            nxt = all_presets[idx + 1]
+                            cur_order = preset.get('sort_order', idx)
+                            nxt_order = nxt.get('sort_order', idx + 1)
+                            db.update_preset(preset['id'], sort_order=nxt_order)
+                            db.update_preset(nxt['id'], sort_order=cur_order)
+                            st.rerun()
                 with col_del:
                     if st.button("🗑️", key=f"del_preset_{preset['id']}", help=f"Xóa {preset['preset_name']}"):
                         if db.delete_preset(preset['id']):
-                            st.success(f"Đã xóa: {preset['preset_name']}")
+                            st.toast(f"Đã xóa: {preset['preset_name']}", icon="🗑️")
                             st.rerun()
                         else:
                             st.error("Lỗi!")
