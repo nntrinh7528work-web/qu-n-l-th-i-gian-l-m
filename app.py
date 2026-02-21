@@ -28,7 +28,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, time, timedelta
 import calendar
 from io import BytesIO
-import time as time_module  # For loading states
+
 
 # Import các module nội bộ
 import db_wrapper as db  # Tự động chọn Supabase hoặc SQLite
@@ -38,7 +38,7 @@ import calculations as calc
 # ==================== CẤU HÌNH TRANG ====================
 
 st.set_page_config(
-    page_title="Work Tracker Pro",
+    page_title="Time Mân",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -1093,7 +1093,7 @@ with tab2:
                             st.error("❌ Tổng giờ làm phải lớn hơn 0")
                         else:
                             with st.spinner("Đang lưu thay đổi..."):
-                                        success = db.update_work_shift(
+                                success = db.update_work_shift(
                                     shift_id=shift['id'],
                                     shift_name=new_shift_name,
                                     start_time=new_start.strftime('%H:%M'),
@@ -1102,12 +1102,12 @@ with tab2:
                                     total_hours=new_total_hours,
                                     notes=new_notes
                                 )
-                            if success:
-                                st.success("🎉 Đã cập nhật ca làm việc!")
-                                st.cache_data.clear()
-                                st.rerun()
-                            else:
-                                st.error("😿 Lỗi khi cập nhật!")
+                                if success:
+                                    st.success("🎉 Đã cập nhật ca làm việc!")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.error("😿 Lỗi khi cập nhật!")
                 
                 with col_del:
                     # Xác nhận xóa hai bước
@@ -1116,7 +1116,7 @@ with tab2:
                         st.warning("⚠️ Nhấn lại để xác nhận xóa")
                         if st.button("❗ XÁC NHẬN XÓA", key=f"confirm_delete_shift_{shift['id']}", type="secondary"):
                             with st.spinner("Đang xóa..."):
-                                        if db.delete_work_shift(shift['id']):
+                                if db.delete_work_shift(shift['id']):
                                     st.success("🗑️ Đã xóa ca!")
                                     st.session_state[confirm_key] = False
                                     st.cache_data.clear()
@@ -1179,7 +1179,6 @@ with tab2:
                     st.error(err)
             else:
                 with st.spinner("Đang thêm ca..."):
-                    time_module.sleep(0.3)
                     shift_id = db.add_work_shift(
                         work_date=edit_date,
                         shift_name=add_name,
@@ -1557,7 +1556,6 @@ with tab4:
         
         if st.button("💖 LƯU GIờ CHUẨN", key="save_standard"):
             with st.spinner("Đang lưu..."):
-                time_module.sleep(0.3)
                 if db.update_setting("standard_hours", str(new_standard)):
                     st.success(f"💫 Đã cập nhật giờ làm chuẩn: {new_standard} giờ")
                 else:
@@ -1576,7 +1574,6 @@ with tab4:
         
         if st.button("💖 LƯU GIờ NGHỈ", key="save_break"):
             with st.spinner("Đang lưu..."):
-                time_module.sleep(0.3)
                 if db.update_setting("break_hours", str(new_break)):
                     st.success(f"💫 Đã cập nhật giờ nghỉ mặc định: {new_break} giờ")
                 else:
@@ -1855,7 +1852,6 @@ with tab4:
         if st.button("➕ THÊM NGÀY NGHỈ", type="primary", key="add_holiday_btn"):
             if new_holiday_desc.strip():
                 with st.spinner("Đang thêm ngày nghỉ..."):
-                    time_module.sleep(0.3)
                     if db.add_holiday(new_holiday_date, new_holiday_desc.strip()):
                         st.success(f"🎉 Đã thêm ngày nghỉ: {new_holiday_date.strftime('%d/%m/%Y')} - {new_holiday_desc}")
                         st.rerun()
@@ -1901,7 +1897,6 @@ with tab4:
         
         if st.button("🇻🇳 THÊM CÁC NGÀY LỄ CHÍNH NĂM " + str(current_year), key="add_vn_holidays"):
             with st.spinner("Đang thêm ngày lễ..."):
-                time_module.sleep(0.3)
                 added = 0
                 for hol_date, hol_desc in vn_holidays:
                     if db.add_holiday(hol_date, hol_desc):
